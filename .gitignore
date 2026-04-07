@@ -1,0 +1,18 @@
+# Compiled binary
+gosentinel
+gosentinel.exe
+
+# Generated reports — don't commit scan output
+*.html
+*.pdf
+
+# macOS
+.DS_Store
+
+# Editor directories
+.idea/
+.vscode/
+
+# Go test cache
+*.test
+*.out
