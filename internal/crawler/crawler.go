@@ -73,8 +73,8 @@ func (s *Spider) isInScope(link string) bool {
 	if err != nil {
 		return false
 	}
-	// Stay within dominated scope (subdomains allowed)
-	return strings.HasSuffix(parsed.Host, s.BaseURL.Host)
+	// Stay within exact host OR subdomains (e.g. sub.example.com)
+	return parsed.Host == s.BaseURL.Host || strings.HasSuffix(parsed.Host, "."+s.BaseURL.Host)
 }
 
 func (s *Spider) shouldVisit(link string) bool {

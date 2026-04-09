@@ -240,3 +240,26 @@ func TestSpider_Deduplication(t *testing.T) {
 		t.Errorf("Deduplication failed: expected 2 distinct endpoints, got %d", len(s.Endpoints))
 	}
 }
+
+func TestSpider_ScopeSecurity(t *testing.T) {
+	s, _ := NewSpider("http://example.com", 0)
+
+	tests := []struct {
+		url     string
+		inScope bool
+	}{
+		{"http://example.com/test", true},
+		{"http://sub.example.com/test", true},
+		{"http://deeper.sub.example.com/test", true},
+		{"http://evil-example.com/test", false}, // Suffix squatting
+		{"http://anotherexample.com/test", false},
+		{"http://example.com.evil.com/test", false},
+	}
+
+	for _, tc := range tests {
+		got := s.isInScope(tc.url)
+		if got != tc.inScope {
+			t.Errorf("isInScope(%q) = %v; want %v", tc.url, got, tc.inScope)
+		}
+	}
+}
