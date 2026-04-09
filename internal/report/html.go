@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Stolonifer1903/gosentinel/internal/crawler"
 )
 
 // HeaderFinding represents a single security header check result.
@@ -30,6 +32,7 @@ type ScanResult struct {
 	Status         string
 	AllHeaders     http.Header
 	SecurityAudit  []HeaderFinding
+	Endpoints      []crawler.Endpoint
 	MissingCount   int
 }
 
@@ -268,6 +271,26 @@ const htmlTemplate = `<!DOCTYPE html>
       </div>
       {{end}}
     </div>
+  </div>
+
+  <!-- ── Discovered Endpoints ── -->
+  <div class="section">
+    <div class="section-title">Discovered Endpoints</div>
+    <table>
+      <thead>
+        <tr><th>Method</th><th>Source</th><th>URL</th><th>Parameters</th></tr>
+      </thead>
+      <tbody>
+        {{range .Endpoints}}
+        <tr>
+          <td><span class="status-badge {{if eq .Method "POST"}}status-5xx{{else}}status-2xx{{end}}">{{.Method}}</span></td>
+          <td>{{.Source}}</td>
+          <td class="h-name">{{.URL}}</td>
+          <td class="dim">{{if .Params}}{{join .Params ", "}}{{else}}—{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
   </div>
 
   <!-- ── All response headers ── -->

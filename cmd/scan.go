@@ -12,6 +12,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/Stolonifer1903/gosentinel/internal/httpclient"
 	"github.com/Stolonifer1903/gosentinel/internal/report"
+	"github.com/Stolonifer1903/gosentinel/internal/crawler"
 	"github.com/spf13/cobra"
 )
 
@@ -90,13 +91,30 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	printStatusLine(httpResult)
 	printHeaders(httpResult, verbose)
 
-	// ── 3. Build security audit findings ─────────────────────────────────────
+	// ── 3. Spidering ──────────────────────────────────────────────────────────
+	fmt.Printf("%s Spidering target (depth %d)…\n", cyan("[~]"), depth)
+	spider, err := crawler.NewSpider(parsedURL.String(), depth)
+	if err != nil {
+		return fmt.Errorf("initializing spider: %w", err)
+	}
+
+	endpoints, err := spider.Crawl()
+	if err != nil {
+		fmt.Printf(" %s Spidering failed: %v\n\n", red("[!]"), err)
+	} else {
+		fmt.Printf(" %s Discovered %d endpoints\n\n", green("[✔]"), len(endpoints))
+		if len(endpoints) > 0 {
+			printEndpoints(endpoints, verbose)
+		}
+	}
+
+	// ── 4. Build security audit findings ─────────────────────────────────────
 	audit := buildSecurityAudit(httpResult)
 	printSecuritySummary(audit)
 
-	// ── 4. Write report file if --output was given ────────────────────────────
+	// ── 5. Write report file if --output was given ────────────────────────────
 	if output != "" {
-		if err := writeReport(output, parsedURL.String(), httpResult, audit); err != nil {
+		if err := writeReport(output, parsedURL.String(), httpResult, audit, endpoints); err != nil {
 			return fmt.Errorf("writing report: %w", err)
 		}
 	}
@@ -240,7 +258,7 @@ func printSecuritySummary(findings []report.HeaderFinding) {
 }
 
 // writeReport dispatches to the right renderer based on the file extension.
-func writeReport(outPath, target string, r *httpclient.HeaderResult, audit []report.HeaderFinding) error {
+func writeReport(outPath, target string, r *httpclient.HeaderResult, audit []report.HeaderFinding, endpoints []crawler.Endpoint) error {
 	// Count missing headers for the summary banner.
 	missingCount := 0
 	for _, f := range audit {
@@ -257,6 +275,7 @@ func writeReport(outPath, target string, r *httpclient.HeaderResult, audit []rep
 		Status:        r.Status,
 		AllHeaders:    r.Headers,
 		SecurityAudit: audit,
+		Endpoints:     endpoints,
 		MissingCount:  missingCount,
 	}
 
@@ -288,4 +307,32 @@ func canonicalHeader(s string) string {
 		}
 	}
 	return strings.Join(parts, "-")
+}
+
+func printEndpoints(endpoints []crawler.Endpoint, verbose bool) {
+	fmt.Printf("%s\n", hiWhite("  ┌─ Discovered Attack Surface "))
+
+	for _, e := range endpoints {
+		methodColor := green
+		if e.Method == "POST" {
+			methodColor = yellow
+		} else if e.Method != "GET" {
+			methodColor = red
+		}
+
+		paramsOutput := ""
+		if len(e.Params) > 0 {
+			paramsOutput = dim(" [%s]", strings.Join(e.Params, ", "))
+		}
+
+		// Truncate long URLs unless verbose
+		displayURL := e.URL
+		if !verbose && len(displayURL) > 80 {
+			displayURL = displayURL[:77] + "…"
+		}
+
+		fmt.Printf("  %s %-6s %s%s\n",
+			cyan("│"), methodColor("%s", e.Method), white("%s", displayURL), paramsOutput)
+	}
+	fmt.Printf("%s\n\n", hiWhite("  └─"))
 }
