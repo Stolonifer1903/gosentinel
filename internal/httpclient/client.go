@@ -4,6 +4,7 @@ package httpclient
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -46,7 +47,11 @@ func FetchHeaders(url string) (*HeaderResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		// Drain and close the body to allow TCP connection reuse
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	return &HeaderResult{
 		URL:        url,

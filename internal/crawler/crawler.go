@@ -2,6 +2,7 @@ package crawler
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"sync"
@@ -114,7 +115,11 @@ func (s *Spider) processURL(target string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		// Drain and close the body to allow TCP connection reuse
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if !strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
 		return nil, nil
