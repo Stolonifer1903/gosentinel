@@ -8,19 +8,20 @@ GoSentinel is a CLI tool that scans a target web application for common security
 
 ## Features
 
-- 🔍 **HTTP header fetching** — full response header inspection with timing
-- 🛡️ **Security header audit** — detects missing HSTS, CSP, X-Frame-Options, and more
-- 📄 **HTML report generation** — self-contained dark-mode report saved locally
-- ⚙️ **Configurable crawler depth** — controls how many pages deep the scanner crawls
-- 🎨 **Colour-coded terminal output** — clear, readable CLI output
+- 🕵️ **BFS Web Crawler** — Recursively discovers links and forms while respecting `--depth`
+- 🛡️ **Security Header Audit** — Detects missing HSTS, CSP, X-Frame-Options, and more
+- 🔍 **Attack Surface Mapping** — Automatically extracts form inputs and parameters
+- 📄 **HTML Report Generation** — Self-contained dark-mode reports with full discovery logs
+- 🔒 **Domain Locking** — Safety controls to ensure the scanner stays within target boundaries
+- 🎨 **Premium Terminal UI** — Colour-coded, formatted output for clear reconnaissance
 
-> **OWASP scanner modules** (SQLi, XSS, CSRF, SSRF, IDOR, etc.) are actively in development.
+> **OWASP scanner modules** (SQLi, XSS, CSRF, etc.) are currently being integrated into the engine.
 
 ---
 
 ## Installation
 
-**Requires Go 1.21+**
+**Requires Go 1.22+**
 
 ```bash
 go install github.com/Stolonifer1903/gosentinel@latest
@@ -39,51 +40,51 @@ go build -o gosentinel .
 ## Usage
 
 ```bash
-# Basic scan — prints headers + security audit to terminal
+# Basic scan + spidering (default depth 2)
 gosentinel scan --url https://example.com
 
-# Save results as an HTML report
-gosentinel scan --url https://example.com --output report.html
+# Map deep attack surface (depth 5)
+gosentinel scan --url https://example.com --depth 5
 
-# Set crawler depth (default: 2)
-gosentinel scan --url https://example.com --depth 3
+# Save discovery and audit results to an HTML report
+gosentinel scan --url https://example.com --output results.html
 
-# Verbose output — shows full header values
+# Verbose mode (shows full URLs and headers)
 gosentinel scan --url https://example.com -v
-
-# Show all available flags
-gosentinel scan --help
 ```
 
 ---
 
 ## Example Output
 
-```
+```text
 ────────────────────────────────────────────────────────────
  Target:  https://example.com
  Depth:   2
- Started: 2026-04-07 06:02:01
+ Started: 2026-04-09 03:27:09
 ────────────────────────────────────────────────────────────
 
 [~] Fetching response headers…
+ Status: 200 OK   Time: 56ms
 
- Status: 200 OK   Time: 49ms
+[~] Spidering target (depth 2)…
+ [✔] Discovered 3 endpoints
 
-  ┌─ Response Headers
-  │ Content-Type    text/html
-  │ Server          cloudflare
+  ┌─ Discovered Attack Surface 
+  │ GET    https://example.com
+  │ GET    https://example.com/about
+  │ POST   https://example.com/login [user, password]
   └─
 
-  ┌─ Security Header Audit
-  │ ✘ MISSING   Content-Security-Policy     CSP — mitigates XSS
-  │ ✘ MISSING   Strict-Transport-Security   HSTS — enforces HTTPS
-  │ ✘ MISSING   X-Frame-Options             Clickjacking protection
+  ┌─ Security Header Audit 
+  │ ✘ MISSING   Content-Security-Policy              CSP — mitigates XSS
+  │ ✘ MISSING   Strict-Transport-Security            HSTS — enforces HTTPS
+  │ ✘ MISSING   X-Frame-Options                      Clickjacking protection
   └─
 
  [✘] 6 security headers missing — review recommended.
 
- [✔] Report saved → /Users/.../report.html
+ [✔] Report saved → /Users/shreyyadav/GoSentinel/results.html
 ```
 
 ---
@@ -93,13 +94,15 @@ gosentinel scan --help
 ```
 gosentinel/
 ├── cmd/
-│   ├── root.go          # Root Cobra command + banner
-│   └── scan.go          # scan subcommand
+│   ├── root.go          # CLI entry points and banners
+│   └── scan.go          # Core scan logic and output formatting
 ├── internal/
+│   ├── crawler/
+│   │   └── crawler.go   # BFS spider, link & form extraction
 │   ├── httpclient/
-│   │   └── client.go    # Shared HTTP client (all modules use this)
+│   │   └── client.go    # Persistent HTTP client & header utilities
 │   └── report/
-│       └── html.go      # HTML report renderer
+│       └── html.go      # HTML template and report generation
 ├── main.go
 └── go.mod
 ```
@@ -112,13 +115,13 @@ gosentinel/
 - [x] HTTP header fetching
 - [x] Security header audit
 - [x] HTML report generation
-- [ ] BFS web crawler with `--depth` support
+- [x] BFS web crawler (Spider) with `--depth`
 - [ ] SQLi detection module
 - [ ] XSS detection module
 - [ ] CSRF detection module
 - [ ] SSRF detection module
 - [ ] IDOR detection module
-- [ ] React dashboard
+- [ ] React dashboard (Web UI)
 
 ---
 
