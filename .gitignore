@@ -16,3 +16,6 @@ gosentinel.exe
 # Go test cache
 *.test
 *.out
+
+# Project documentation
+PROJECT_PLAN.md
