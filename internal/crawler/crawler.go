@@ -27,10 +27,11 @@ type Spider struct {
 	mu          sync.Mutex
 	Endpoints   []Endpoint
 	endpointsMu sync.Mutex
+	Sem         chan struct{} // Concurrency semaphore
 }
 
 // NewSpider creates a new spider instance.
-func NewSpider(targetURL string, maxDepth int) (*Spider, error) {
+func NewSpider(targetURL string, maxDepth int, concurrency int) (*Spider, error) {
 	parsed, err := url.Parse(targetURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid spider URL: %w", err)
@@ -40,6 +41,7 @@ func NewSpider(targetURL string, maxDepth int) (*Spider, error) {
 		BaseURL:  parsed,
 		MaxDepth: maxDepth,
 		Visited:  make(map[string]bool),
+		Sem:      make(chan struct{}, concurrency),
 	}, nil
 }
 
@@ -49,17 +51,33 @@ func (s *Spider) Crawl() ([]Endpoint, error) {
 
 	for depth := 0; depth <= s.MaxDepth; depth++ {
 		var nextLevel []string
+		var nextLevelMu sync.Mutex
+		var wg sync.WaitGroup
+
 		for _, link := range currentLevel {
 			if s.shouldVisit(link) {
 				s.markVisited(link)
-				discoveredLinks, err := s.processURL(link)
-				if err != nil {
-					// Log error and continue to other links
-					continue
-				}
-				nextLevel = append(nextLevel, discoveredLinks...)
+				
+				wg.Add(1)
+				s.Sem <- struct{}{} // Acquire semaphore
+
+				go func(target string) {
+					defer wg.Done()
+					defer func() { <-s.Sem }() // Release semaphore
+					
+					discoveredLinks, err := s.processURL(target)
+					if err == nil && len(discoveredLinks) > 0 {
+						nextLevelMu.Lock()
+						nextLevel = append(nextLevel, discoveredLinks...)
+						nextLevelMu.Unlock()
+					}
+				}(link)
 			}
 		}
+		
+		// Wait for all goroutines at this depth to finish
+		wg.Wait()
+		
 		currentLevel = nextLevel
 		if len(currentLevel) == 0 {
 			break

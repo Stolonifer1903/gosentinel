@@ -56,6 +56,7 @@ var scanCmd = &cobra.Command{
 func init() {
 	scanCmd.Flags().StringP("url", "u", "", "Target URL to scan (required)")
 	scanCmd.Flags().IntP("depth", "d", 2, "Crawler depth limit (pages to follow from the root)")
+	scanCmd.Flags().IntP("concurrency", "c", 10, "Number of concurrent crawler requests")
 	scanCmd.Flags().StringP("output", "o", "", "Write report to file (e.g. report.html)")
 
 	// Mark --url as required so Cobra validates it before RunE is called.
@@ -69,6 +70,7 @@ func init() {
 func runScan(cmd *cobra.Command, _ []string) error {
 	target, _ := cmd.Flags().GetString("url")
 	depth, _ := cmd.Flags().GetInt("depth")
+	concurrency, _ := cmd.Flags().GetInt("concurrency")
 	output, _ := cmd.Flags().GetString("output")
 	verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
 
@@ -92,8 +94,8 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	printHeaders(httpResult, verbose)
 
 	// ── 3. Spidering ──────────────────────────────────────────────────────────
-	fmt.Printf("%s Spidering target (depth %d)…\n", cyan("[~]"), depth)
-	spider, err := crawler.NewSpider(parsedURL.String(), depth)
+	fmt.Printf("%s Spidering target (depth %d, concurrency %d)…\n", cyan("[~]"), depth, concurrency)
+	spider, err := crawler.NewSpider(parsedURL.String(), depth, concurrency)
 	if err != nil {
 		return fmt.Errorf("initializing spider: %w", err)
 	}
