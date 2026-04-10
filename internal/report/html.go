@@ -275,7 +275,7 @@ const htmlTemplate = `<!DOCTYPE html>
 
   <!-- ── Discovered Endpoints ── -->
   <div class="section">
-    <div class="section-title">Discovered Endpoints</div>
+    <div class="section-title">Discovered Endpoints ({{len .Endpoints}})</div>
     <table>
       <thead>
         <tr><th>Method</th><th>Source</th><th>URL</th><th>Parameters</th></tr>
