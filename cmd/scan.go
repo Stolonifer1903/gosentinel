@@ -3,16 +3,17 @@ package cmd
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/Stolonifer1903/gosentinel/internal/crawler"
 	"github.com/Stolonifer1903/gosentinel/internal/httpclient"
 	"github.com/Stolonifer1903/gosentinel/internal/report"
-	"github.com/Stolonifer1903/gosentinel/internal/crawler"
+	"github.com/Stolonifer1903/gosentinel/internal/scanner"
+	"github.com/Stolonifer1903/gosentinel/internal/scanner/modules"
 	"github.com/spf13/cobra"
 )
 
@@ -28,17 +29,7 @@ var (
 	dim     = color.New(color.Faint).SprintfFunc()
 )
 
-// securityHeaders lists headers that are security-relevant so we can highlight
-// missing ones during the headers-only phase. Full checks will live in the
-// scanner/headers module later.
-var securityHeaders = map[string]string{
-	"strict-transport-security": "HSTS — enforces HTTPS",
-	"content-security-policy":   "CSP — mitigates XSS",
-	"x-frame-options":           "Clickjacking protection",
-	"x-content-type-options":    "MIME-sniffing protection",
-	"referrer-policy":           "Controls referrer leakage",
-	"permissions-policy":        "Feature/permission control",
-}
+
 
 // ── scan command ──────────────────────────────────────────────────────────────
 
@@ -110,13 +101,25 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	// ── 4. Build security audit findings ─────────────────────────────────────
-	audit := buildSecurityAudit(httpResult)
-	printSecuritySummary(audit)
+	// ── 4. Run scanner engine ─────────────────────────────────────────────────────
+	fmt.Printf("%s Running vulnerability checks…\n", cyan("[~]"))
+	activeModules := []scanner.Module{
+		&modules.HeadersModule{},
+	}
+	engine := scanner.NewEngine(activeModules)
+	scanResult, err := engine.Run(cmd.Context(), endpoints)
+	if err != nil {
+		fmt.Printf(" %s Scanner failed: %v\n\n", red("[!]"), err)
+	} else {
+		fmt.Printf(" %s %d finding(s) detected\n\n", green("[✔]"), len(scanResult.Findings))
+		if len(scanResult.Findings) > 0 {
+			printFindings(scanResult.Findings, verbose)
+		}
+	}
 
 	// ── 5. Write report file if --output was given ────────────────────────────
 	if output != "" {
-		if err := writeReport(output, parsedURL.String(), httpResult, audit, endpoints); err != nil {
+		if err := writeReport(output, parsedURL.String(), httpResult, scanResult.Findings, endpoints); err != nil {
 			return fmt.Errorf("writing report: %w", err)
 		}
 	}
@@ -168,6 +171,7 @@ func printStatusLine(r *httpclient.HeaderResult) {
 	)
 }
 
+// printHeaders displays all response headers in the terminal.
 func printHeaders(r *httpclient.HeaderResult, verbose bool) {
 	// Sort header names for deterministic, readable output.
 	names := make([]string, 0, len(r.Headers))
@@ -185,106 +189,30 @@ func printHeaders(r *httpclient.HeaderResult, verbose bool) {
 			values = values[:77] + "…"
 		}
 
-		// Highlight security-relevant headers.
-		if _, isSec := securityHeaders[strings.ToLower(name)]; isSec {
-			fmt.Printf("  %s %-36s %s\n",
-				green("│"), green("%-36s", name), green(values))
-		} else {
-			fmt.Printf("  %s %-36s %s\n",
-				dim("│"), cyan("%-36s", name), white(values))
-		}
+		fmt.Printf("  %s %-36s %s\n",
+			dim("│"), cyan("%-36s", name), white(values))
 	}
 	fmt.Printf("%s\n\n", hiWhite("  └─"))
 }
 
-// buildSecurityAudit checks the response headers against the known security
-// header list and returns a slice of HeaderFinding for both console and report.
-func buildSecurityAudit(r *httpclient.HeaderResult) []report.HeaderFinding {
-	findings := make([]report.HeaderFinding, 0, len(securityHeaders))
-	for header, description := range securityHeaders {
-		var val string
-		found := false
-		for name, vals := range r.Headers {
-			if strings.EqualFold(name, header) {
-				found = true
-				val = strings.Join(vals, "; ")
-				break
-			}
-		}
-		findings = append(findings, report.HeaderFinding{
-			Header:      canonicalHeader(header),
-			Present:     found,
-			Value:       val,
-			Description: description,
-		})
-	}
-	// Sort: present first, then alphabetical — deterministic output.
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Present != findings[j].Present {
-			return findings[i].Present
-		}
-		return findings[i].Header < findings[j].Header
-	})
-	return findings
-}
 
-func printSecuritySummary(findings []report.HeaderFinding) {
-	fmt.Printf("%s\n", hiWhite("  ┌─ Security Header Audit "))
-
-	missing := []string{}
-	for _, f := range findings {
-		if f.Present {
-			fmt.Printf("  %s %s %s\n",
-				green("│"), green("✔ PRESENT  "), white("%-36s %s", f.Header, dim(f.Description)))
-		} else {
-			fmt.Printf("  %s %s %s\n",
-				red("│"), red("✘ MISSING  "), white("%-36s %s", f.Header, dim(f.Description)))
-			missing = append(missing, f.Header)
-		}
-	}
-
-	fmt.Printf("%s\n\n", hiWhite("  └─"))
-
-	switch {
-	case len(missing) == 0:
-		fmt.Printf(" %s All security headers present.\n\n", green("[✔]"))
-	case len(missing) <= 2:
-		fmt.Printf(" %s %d security header(s) missing — low risk.\n\n", yellow("[!]"), len(missing))
-	default:
-		fmt.Printf(" %s %d security headers missing — review recommended.\n\n", red("[✘]"), len(missing))
-		fmt.Printf("   %s %s\n\n", dim("Missing:"), dim(strings.Join(missing, ", ")))
-	}
-
-	fmt.Fprintf(os.Stdout, " %s Deep vulnerability scanning coming soon — run with --help for all options.\n\n",
-		cyan("[i]"))
-}
 
 // writeReport dispatches to the right renderer based on the file extension.
-func writeReport(outPath, target string, r *httpclient.HeaderResult, audit []report.HeaderFinding, endpoints []crawler.Endpoint) error {
-	// Count missing headers for the summary banner.
-	missingCount := 0
-	for _, f := range audit {
-		if !f.Present {
-			missingCount++
-		}
-	}
-
+func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []scanner.Finding, endpoints []crawler.Endpoint) error {
 	result := &report.ScanResult{
-		Target:        target,
-		ScannedAt:     time.Now(),
-		Duration:      r.Duration,
-		StatusCode:    r.StatusCode,
-		Status:        r.Status,
-		AllHeaders:    r.Headers,
-		SecurityAudit: audit,
-		Endpoints:     endpoints,
-		MissingCount:  missingCount,
+		Target:     target,
+		ScannedAt:  time.Now(),
+		Duration:   r.Duration,
+		StatusCode: r.StatusCode,
+		Status:     r.Status,
+		AllHeaders: r.Headers,
+		Findings:   findings,
+		Endpoints:  endpoints,
 	}
 
 	ext := strings.ToLower(filepath.Ext(outPath))
 	switch ext {
 	case ".html", ".htm", "":
-		// Default to HTML when no extension given.
 		if ext == "" {
 			outPath += ".html"
 		}
@@ -300,15 +228,33 @@ func writeReport(outPath, target string, r *httpclient.HeaderResult, audit []rep
 	return nil
 }
 
-// canonicalHeader converts "content-security-policy" → "Content-Security-Policy".
-func canonicalHeader(s string) string {
-	parts := strings.Split(s, "-")
-	for i, p := range parts {
-		if len(p) > 0 {
-			parts[i] = strings.ToUpper(p[:1]) + p[1:]
-		}
+// printFindings renders scanner findings in a structured terminal block.
+func printFindings(findings []scanner.Finding, verbose bool) {
+	severityColor := map[scanner.Severity]func(string, ...interface{}) string{
+		scanner.Critical: red,
+		scanner.High:     red,
+		scanner.Medium:   yellow,
+		scanner.Low:      cyan,
+		scanner.Info:     dim,
 	}
-	return strings.Join(parts, "-")
+
+	fmt.Printf("%s\n", hiWhite("  ┌─ Findings "))
+	for _, f := range findings {
+		sevFn, ok := severityColor[f.Severity]
+		if !ok {
+			sevFn = white
+		}
+
+		displayURL := f.URL
+		if !verbose && len(displayURL) > 80 {
+			displayURL = displayURL[:77] + "…"
+		}
+
+		fmt.Printf("  %s %s %s\n",
+			sevFn("│"), sevFn("%-10s", string(f.Severity)), white("%s", f.Title))
+		fmt.Printf("  %s         %s\n", dim("│"), dim("%s → %s", f.OWASP, displayURL))
+	}
+	fmt.Printf("%s\n\n", hiWhite("  └─"))
 }
 
 func printEndpoints(endpoints []crawler.Endpoint, verbose bool) {

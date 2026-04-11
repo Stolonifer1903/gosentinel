@@ -13,27 +13,19 @@ import (
 	"time"
 
 	"github.com/Stolonifer1903/gosentinel/internal/crawler"
+	"github.com/Stolonifer1903/gosentinel/internal/scanner"
 )
-
-// HeaderFinding represents a single security header check result.
-type HeaderFinding struct {
-	Header      string
-	Present     bool
-	Value       string
-	Description string
-}
 
 // ScanResult is the data model passed to report renderers.
 type ScanResult struct {
-	Target         string
-	ScannedAt      time.Time
-	Duration       time.Duration
-	StatusCode     int
-	Status         string
-	AllHeaders     http.Header
-	SecurityAudit  []HeaderFinding
-	Endpoints      []crawler.Endpoint
-	MissingCount   int
+	Target     string
+	ScannedAt  time.Time
+	Duration   time.Duration
+	StatusCode int
+	Status     string
+	AllHeaders http.Header
+	Findings   []scanner.Finding
+	Endpoints  []crawler.Endpoint
 }
 
 // WriteHTML renders the scan result as a self-contained HTML file to outPath.
@@ -245,32 +237,37 @@ const htmlTemplate = `<!DOCTYPE html>
       <div class="label">Headers Found</div>
       <div class="value">{{len .AllHeaders}}</div>
     </div>
+    <div>
+      <div class="label">Findings</div>
+      <div class="value">{{len .Findings}}</div>
+    </div>
   </div>
 
-  <!-- ── Summary banner ── -->
-  {{if eq .MissingCount 0}}
-  <div class="summary-banner ok"><span class="icon">✔</span> All security headers are present.</div>
-  {{else if le .MissingCount 2}}
-  <div class="summary-banner warn"><span class="icon">⚠</span> {{.MissingCount}} security header(s) missing — low risk.</div>
-  {{else}}
-  <div class="summary-banner danger"><span class="icon">✘</span> {{.MissingCount}} security headers missing — review recommended.</div>
-  {{end}}
-
-  <!-- ── Security header audit ── -->
+  <!-- ── Vulnerability Findings ── -->
   <div class="section">
-    <div class="section-title">Security Header Audit</div>
+    <div class="section-title">Vulnerability Findings ({{len .Findings}})</div>
+    {{if .Findings}}
     <div class="audit-grid">
-      {{range .SecurityAudit}}
-      <div class="audit-row {{if .Present}}present{{else}}missing{{end}}">
-        <div class="audit-icon">{{if .Present}}✔{{else}}✘{{end}}</div>
-        <div class="audit-name">{{.Header}}</div>
+      {{range .Findings}}
+      <div class="audit-row {{if eq (print .Severity) "Critical"}}missing{{else if eq (print .Severity) "High"}}missing{{else if eq (print .Severity) "Medium"}}warn-row{{else}}present{{end}}">
+        <div class="audit-icon">
+          {{if eq (print .Severity) "Critical"}}☠
+          {{else if eq (print .Severity) "High"}}⚠
+          {{else if eq (print .Severity) "Medium"}}⚡
+          {{else}}ℹ{{end}}
+        </div>
+        <div class="audit-name">{{.Title}}</div>
         <div class="audit-detail">
-          <div class="desc">{{.Description}}</div>
-          {{if .Present}}<div class="val">{{.Value}}</div>{{end}}
+          <div class="desc"><strong>{{.Severity}}</strong> — {{.OWASP}}</div>
+          <div class="desc">{{.Evidence}}</div>
+          {{if .Remediation}}<div class="val">Fix: {{.Remediation}}</div>{{end}}
         </div>
       </div>
       {{end}}
     </div>
+    {{else}}
+    <p style="color:var(--green);padding:.75rem 0">No findings detected.</p>
+    {{end}}
   </div>
 
   <!-- ── Discovered Endpoints ── -->
@@ -304,7 +301,7 @@ const htmlTemplate = `<!DOCTYPE html>
         {{$h := .AllHeaders}}
         {{range (sortedHeaders $h)}}
         <tr>
-          <td class="h-name {{if headerVal $h .}}h-sec{{end}}">{{.}}</td>
+          <td class="h-name">{{.}}</td>
           <td class="h-val">{{headerVal $h .}}</td>
         </tr>
         {{end}}
