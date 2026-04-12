@@ -62,3 +62,65 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 
 	return &Result{Findings: allFindings}, nil
 }
+
+// Group aggregates identical findings (same Title and Severity) into GroupedFinding structs.
+// It returns a slice sorted by severity (Critical first).
+func (r *Result) Group() []GroupedFinding {
+	type key struct {
+		title       string
+		severity    Severity
+		owasp       string
+		evidence    string
+		remediation string
+	}
+
+	groups := make(map[key]*GroupedFinding)
+	var order []key
+
+	for _, f := range r.Findings {
+		k := key{
+			title:       f.Title,
+			severity:    f.Severity,
+			owasp:       f.OWASP,
+			evidence:    f.Evidence,
+			remediation: f.Remediation,
+		}
+
+		if g, ok := groups[k]; ok {
+			// Check for URL deduplication within the group
+			exists := false
+			for _, url := range g.Endpoints {
+				if url == f.URL {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				g.Endpoints = append(g.Endpoints, f.URL)
+			}
+		} else {
+			groups[k] = &GroupedFinding{
+				Title:       f.Title,
+				Severity:    f.Severity,
+				OWASP:       f.OWASP,
+				Evidence:    f.Evidence,
+				Remediation: f.Remediation,
+				Endpoints:   []string{f.URL},
+			}
+			order = append(order, k)
+		}
+	}
+
+	result := make([]GroupedFinding, 0, len(groups))
+	for _, k := range order {
+		result = append(result, *groups[k])
+	}
+
+	// Sort by severity rank
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Rank() > result[j].Rank()
+	})
+
+	return result
+}
+

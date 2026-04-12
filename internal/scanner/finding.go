@@ -51,3 +51,18 @@ type Finding struct {
 func (f Finding) Rank() int {
 	return severityRank[f.Severity]
 }
+
+// GroupedFinding represents a collection of identical findings across multiple endpoints.
+type GroupedFinding struct {
+	Title       string
+	Severity    Severity
+	OWASP       string
+	Evidence    string
+	Remediation string
+	Endpoints   []string
+}
+
+// Rank returns the numeric rank for severity-based sorting of grouped findings.
+func (g GroupedFinding) Rank() int {
+	return severityRank[g.Severity]
+}
