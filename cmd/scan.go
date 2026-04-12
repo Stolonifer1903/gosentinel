@@ -111,15 +111,18 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		fmt.Printf(" %s Scanner failed: %v\n\n", red("[!]"), err)
 	} else {
-		fmt.Printf(" %s %d finding(s) detected\n\n", green("[✔]"), len(scanResult.Findings))
-		if len(scanResult.Findings) > 0 {
-			printFindings(scanResult.Findings, verbose)
+		groupedFindings := scanResult.Group()
+		fmt.Printf(" %s %d unique finding(s) detected (%d instances)\n\n",
+			green("[✔]"), len(groupedFindings), len(scanResult.Findings))
+
+		if len(groupedFindings) > 0 {
+			printFindings(groupedFindings, verbose)
 		}
 	}
 
 	// ── 5. Write report file if --output was given ────────────────────────────
 	if output != "" {
-		if err := writeReport(output, parsedURL.String(), httpResult, scanResult.Findings, endpoints); err != nil {
+		if err := writeReport(output, parsedURL.String(), httpResult, scanResult.Group(), endpoints); err != nil {
 			return fmt.Errorf("writing report: %w", err)
 		}
 	}
@@ -198,7 +201,7 @@ func printHeaders(r *httpclient.HeaderResult, verbose bool) {
 
 
 // writeReport dispatches to the right renderer based on the file extension.
-func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []scanner.Finding, endpoints []crawler.Endpoint) error {
+func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []scanner.GroupedFinding, endpoints []crawler.Endpoint) error {
 	result := &report.ScanResult{
 		Target:     target,
 		ScannedAt:  time.Now(),
@@ -229,7 +232,7 @@ func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []
 }
 
 // printFindings renders scanner findings in a structured terminal block.
-func printFindings(findings []scanner.Finding, verbose bool) {
+func printFindings(findings []scanner.GroupedFinding, verbose bool) {
 	severityColor := map[scanner.Severity]func(string, ...interface{}) string{
 		scanner.Critical: red,
 		scanner.High:     red,
@@ -238,21 +241,27 @@ func printFindings(findings []scanner.Finding, verbose bool) {
 		scanner.Info:     dim,
 	}
 
-	fmt.Printf("%s\n", hiWhite("  ┌─ Findings "))
+	fmt.Printf("%s\n", hiWhite("  ┌─ Findings Summary "))
 	for _, f := range findings {
 		sevFn, ok := severityColor[f.Severity]
 		if !ok {
 			sevFn = white
 		}
 
-		displayURL := f.URL
-		if !verbose && len(displayURL) > 80 {
-			displayURL = displayURL[:77] + "…"
+		countSuffix := ""
+		if len(f.Endpoints) > 1 {
+			countSuffix = dim(" (%d endpoints)", len(f.Endpoints))
 		}
 
-		fmt.Printf("  %s %s %s\n",
-			sevFn("│"), sevFn("%-10s", string(f.Severity)), white("%s", f.Title))
-		fmt.Printf("  %s         %s\n", dim("│"), dim("%s → %s", f.OWASP, displayURL))
+		fmt.Printf("  %s %s %s%s\n",
+			sevFn("│"), sevFn("%-10s", string(f.Severity)), white("%s", f.Title), countSuffix)
+		fmt.Printf("  %s         %s\n", dim("│"), dim("%s", f.OWASP))
+
+		if verbose {
+			for _, u := range f.Endpoints {
+				fmt.Printf("  %s           %s\n", dim("│"), dim("→ %s", u))
+			}
+		}
 	}
 	fmt.Printf("%s\n\n", hiWhite("  └─"))
 }
