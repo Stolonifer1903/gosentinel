@@ -18,18 +18,25 @@ import (
 
 // ScanResult is the data model passed to report renderers.
 type ScanResult struct {
-	Target     string
-	ScannedAt  time.Time
-	Duration   time.Duration
-	StatusCode int
-	Status     string
-	AllHeaders http.Header
-	Findings   []scanner.Finding
-	Endpoints  []crawler.Endpoint
+	Target         string
+	ScannedAt      time.Time
+	Duration       time.Duration
+	StatusCode     int
+	Status         string
+	AllHeaders     http.Header
+	Findings       []scanner.GroupedFinding
+	Endpoints      []crawler.Endpoint
+	SeverityCounts map[string]int
 }
 
 // WriteHTML renders the scan result as a self-contained HTML file to outPath.
 func WriteHTML(result *ScanResult, outPath string) error {
+	// Pre-calculate severity counts for the executive dashboard
+	result.SeverityCounts = make(map[string]int)
+	for _, f := range result.Findings {
+		result.SeverityCounts[string(f.Severity)]++
+	}
+
 	// Ensure the output directory exists.
 	if dir := filepath.Dir(outPath); dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -75,243 +82,317 @@ const htmlTemplate = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GoSentinel Report — {{.Target}}</title>
+  <title>GoSentinel Pro Report — {{.Target}}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
     :root {
-      --bg:       #0d0f14;
-      --surface:  #13161e;
-      --border:   #1e2330;
-      --cyan:     #00e5ff;
-      --green:    #00e676;
-      --yellow:   #ffea00;
-      --red:      #ff1744;
-      --text:     #e2e8f0;
-      --muted:    #64748b;
-      --radius:   10px;
+      --bg:           #08090d;
+      --surface:      #0f121a;
+      --surface-alt:  #161b26;
+      --border:       rgba(255, 255, 255, 0.08);
+      --cyan:         #00f2ff;
+      --green:        #00ff95;
+      --yellow:       #ffea00;
+      --red:          #ff2e5b;
+      --critical:     linear-gradient(135deg, #ff2e5b 0%, #ff708d 100%);
+      --high:         linear-gradient(135deg, #ff6b00 0%, #ffae00 100%);
+      --medium:       linear-gradient(135deg, #ffea00 0%, #fffd8d 100%);
+      --low:          linear-gradient(135deg, #00f2ff 0%, #87f9ff 100%);
+      --text:         #f1f5f9;
+      --text-muted:    #94a3b8;
+      --radius-lg:    16px;
+      --radius-md:    12px;
+      --shadow:       0 12px 24px -8px rgba(0, 0, 0, 0.5);
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: 'Plus Jakarta Sans', sans-serif;
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
-      padding: 2rem;
+      line-height: 1.6;
+      padding: 3rem 1rem;
+      max-width: 1100px;
+      margin: 0 auto;
     }
 
-    /* ── header bar ── */
-    .report-header {
+    /* ── Header ── */
+    header {
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 1.5rem;
-      margin-bottom: 2rem;
+      align-items: center;
+      margin-bottom: 3rem;
     }
-    .logo { font-size: 1.6rem; font-weight: 700; color: var(--cyan); letter-spacing: -.5px; }
-    .logo span { color: var(--text); }
-    .meta { text-align: right; font-size: .8rem; color: var(--muted); line-height: 1.7; }
+    .brand { font-size: 1.8rem; font-weight: 800; letter-spacing: -1px; }
+    .brand span { color: var(--cyan); }
+    .scan-meta { text-align: right; color: var(--text-muted); font-size: 0.85rem; }
 
-    /* ── target card ── */
-    .target-card {
+    /* ── Executive Summary ── */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 4rem;
+    }
+    .summary-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-left: 4px solid var(--cyan);
-      border-radius: var(--radius);
-      padding: 1.25rem 1.5rem;
-      margin-bottom: 2rem;
-      display: flex;
-      gap: 2rem;
-      flex-wrap: wrap;
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
     }
-    .target-card .label { font-size: .7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: .25rem; }
-    .target-card .value { font-size: .95rem; font-weight: 600; }
-    .target-card .value.url  { color: var(--cyan); font-family: 'JetBrains Mono', monospace; }
-    .status-badge {
-      display: inline-flex; align-items: center; gap: .4rem;
-      padding: .2rem .7rem; border-radius: 999px; font-size: .8rem; font-weight: 600;
+    .summary-card::after {
+      content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
     }
-    .status-2xx { background: rgba(0,230,118,.15); color: var(--green); border: 1px solid rgba(0,230,118,.3); }
-    .status-3xx { background: rgba(179,136,255,.15); color: #b388ff; border: 1px solid rgba(179,136,255,.3); }
-    .status-4xx { background: rgba(255,234,0,.15); color: var(--yellow); border: 1px solid rgba(255,234,0,.3); }
-    .status-5xx { background: rgba(255,23,68,.15); color: var(--red); border: 1px solid rgba(255,23,68,.3); }
+    .summary-card.critical::after { background: var(--critical); }
+    .summary-card.high::after     { background: var(--high); }
+    .summary-card.medium::after   { background: var(--medium); }
+    .summary-card.low::after      { background: var(--low); }
 
-    /* ── section ── */
-    .section { margin-bottom: 2.5rem; }
+    .summary-card .label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; }
+    .summary-card .value { font-size: 2.2rem; font-weight: 800; margin: 0.25rem 0; line-height: 1; }
+    .summary-card.critical .value { color: #ff2e5b; }
+    .summary-card.high .value     { color: #ff6b00; }
+
+    /* ── Vulnerability Card ── */
+    .findings-container { display: flex; flex-direction: column; gap: 1.25rem; }
+    .finding-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .finding-card:hover { border-color: rgba(255,255,255,0.15); }
+    
+    .card-header {
+      padding: 1.5rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 1.5rem;
+    }
+    
+    .severity-pill {
+      padding: 0.4rem 0.8rem;
+      border-radius: 8px;
+      font-size: 0.65rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #000;
+      min-width: 90px;
+      text-align: center;
+    }
+    .pill-critical { background: var(--critical); }
+    .pill-high     { background: var(--high); }
+    .pill-medium   { background: var(--medium); color: #000; }
+    .pill-low      { background: var(--low); color: #000; }
+
+    .finding-info { flex: 1; }
+    .finding-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.25rem; color: #fff; }
+    .finding-owasp { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .card-body {
+      padding: 0 1.5rem 1.5rem 1.5rem;
+    }
+    .evidence-block {
+      background: rgba(255,255,255,0.03);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      font-size: 0.85rem;
+      margin-top: 1rem;
+      border-left: 2px solid var(--border);
+    }
+    .remediation-box {
+      margin-top: 1.25rem;
+      padding: 1rem;
+      background: rgba(0, 242, 255, 0.04);
+      border: 1px solid rgba(0, 242, 255, 0.1);
+      border-radius: var(--radius-md);
+      font-size: 0.85rem;
+    }
+    .remediation-box strong { color: var(--cyan); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 1px; display: block; margin-bottom: 0.4rem; }
+
+    /* ── Affected Endpoints Drawer ── */
+    details.endpoints-drawer {
+      margin-top: 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+    summary.drawer-trigger {
+      padding: 1rem 0;
+      list-style: none;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      user-select: none;
+    }
+    summary.drawer-trigger::before {
+      content: '⊞';
+      font-size: 1.1rem;
+    }
+    details[open] summary.drawer-trigger::before { content: '⊟'; }
+    
+    .url-list {
+      max-height: 250px;
+      overflow-y: auto;
+      padding: 0.5rem 1rem 1.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .url-list::-webkit-scrollbar { width: 5px; }
+    .url-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+    
+    .url-item {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      word-break: break-all;
+      background: rgba(255,255,255,0.02);
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+    }
+    .url-item:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+    /* ── Sections ── */
     .section-title {
-      font-size: .7rem; font-weight: 600; text-transform: uppercase;
-      letter-spacing: 1.5px; color: var(--muted);
-      margin-bottom: 1rem; display: flex; align-items: center; gap: .5rem;
+      font-size: 0.85rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+      margin: 4rem 0 1.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
     }
     .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
-    /* ── security audit table ── */
-    .audit-grid {
-      display: grid;
-      gap: .5rem;
-    }
-    .audit-row {
-      display: grid;
-      grid-template-columns: 1.5rem 14rem 1fr;
-      align-items: start;
-      gap: .75rem;
+    /* ── Table Styling ── */
+    .table-container {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: .75rem 1rem;
-      transition: border-color .15s;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
     }
-    .audit-row:hover { border-color: #2a3050; }
-    .audit-row.present { border-left: 3px solid var(--green); }
-    .audit-row.missing { border-left: 3px solid var(--red); }
-    .audit-icon { font-size: 1rem; margin-top: .05rem; }
-    .audit-name { font-family: 'JetBrains Mono', monospace; font-size: .8rem; font-weight: 500; color: var(--text); }
-    .audit-detail { font-size: .8rem; }
-    .audit-detail .desc { color: var(--muted); margin-bottom: .2rem; }
-    .audit-detail .val  { font-family: 'JetBrains Mono', monospace; color: var(--cyan); font-size: .75rem; word-break: break-all; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; padding: 1rem; color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; font-weight: 800; border-bottom: 1px solid var(--border); }
+    td { padding: 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--cyan); }
 
-    /* ── summary banner ── */
-    .summary-banner {
-      border-radius: var(--radius); padding: 1rem 1.5rem;
-      display: flex; align-items: center; gap: 1rem;
-      margin-bottom: 2rem; font-weight: 500;
+    footer {
+      margin-top: 5rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
     }
-    .summary-banner.ok      { background: rgba(0,230,118,.08); border: 1px solid rgba(0,230,118,.25); color: var(--green); }
-    .summary-banner.warn    { background: rgba(255,234,0,.08); border: 1px solid rgba(255,234,0,.25); color: var(--yellow); }
-    .summary-banner.danger  { background: rgba(255,23,68,.08); border: 1px solid rgba(255,23,68,.25); color: var(--red); }
-    .summary-banner .icon   { font-size: 1.4rem; }
-
-    /* ── all headers table ── */
-    table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-    thead th {
-      text-align: left; padding: .5rem .75rem;
-      font-size: .65rem; font-weight: 600; text-transform: uppercase;
-      letter-spacing: 1px; color: var(--muted);
-      border-bottom: 1px solid var(--border);
-    }
-    tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
-    tbody tr:hover { background: var(--surface); }
-    tbody td { padding: .55rem .75rem; vertical-align: top; }
-    .h-name { font-family: 'JetBrains Mono', monospace; color: var(--cyan); }
-    .h-val  { color: var(--text); word-break: break-all; }
-    .h-sec  { color: var(--green); }
-
-    /* ── footer ── */
-    footer { text-align: center; font-size: .75rem; color: var(--muted); margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
   </style>
 </head>
 <body>
 
-  <!-- ── Report header ── -->
-  <header class="report-header">
-    <div class="logo">Go<span>Sentinel</span></div>
-    <div class="meta">
-      <div>Generated: {{.ScannedAt.Format "2006-01-02 15:04:05 MST"}}</div>
-      <div>Scan duration: {{.Duration.Milliseconds}}ms</div>
+  <header>
+    <div class="brand">Go<span>Sentinel</span></div>
+    <div class="scan-meta">
+      <div>Target: <strong>{{.Target}}</strong></div>
+      <div style="margin-top:2px">{{.ScannedAt.Format "Jan 02, 2006 • 15:04:05 MST"}}</div>
     </div>
   </header>
 
-  <!-- ── Target card ── -->
-  <div class="target-card">
-    <div>
-      <div class="label">Target</div>
-      <div class="value url">{{.Target}}</div>
+  <div class="summary-grid">
+    <div class="summary-card critical">
+      <div class="label">Critical</div>
+      <div class="value">{{index .SeverityCounts "Critical"}}</div>
     </div>
-    <div>
-      <div class="label">HTTP Status</div>
-      <div class="value">
-        {{if ge .StatusCode 500}}<span class="status-badge status-5xx">{{.Status}}</span>
-        {{else if ge .StatusCode 400}}<span class="status-badge status-4xx">{{.Status}}</span>
-        {{else if ge .StatusCode 300}}<span class="status-badge status-3xx">{{.Status}}</span>
-        {{else}}<span class="status-badge status-2xx">{{.Status}}</span>{{end}}
-      </div>
+    <div class="summary-card high">
+      <div class="label">High Risk</div>
+      <div class="value">{{index .SeverityCounts "High"}}</div>
     </div>
-    <div>
-      <div class="label">Response Time</div>
-      <div class="value">{{.Duration.Milliseconds}}ms</div>
+    <div class="summary-card medium">
+      <div class="label">Medium</div>
+      <div class="value">{{index .SeverityCounts "Medium"}}</div>
     </div>
-    <div>
-      <div class="label">Headers Found</div>
-      <div class="value">{{len .AllHeaders}}</div>
-    </div>
-    <div>
-      <div class="label">Findings</div>
-      <div class="value">{{len .Findings}}</div>
+    <div class="summary-card low">
+      <div class="label">Low/Info</div>
+      <div class="value">{{index .SeverityCounts "Low"}}</div>
     </div>
   </div>
 
-  <!-- ── Vulnerability Findings ── -->
-  <div class="section">
-    <div class="section-title">Vulnerability Findings ({{len .Findings}})</div>
-    {{if .Findings}}
-    <div class="audit-grid">
-      {{range .Findings}}
-      <div class="audit-row {{if eq (print .Severity) "Critical"}}missing{{else if eq (print .Severity) "High"}}missing{{else if eq (print .Severity) "Medium"}}warn-row{{else}}present{{end}}">
-        <div class="audit-icon">
-          {{if eq (print .Severity) "Critical"}}☠
-          {{else if eq (print .Severity) "High"}}⚠
-          {{else if eq (print .Severity) "Medium"}}⚡
-          {{else}}ℹ{{end}}
-        </div>
-        <div class="audit-name">{{.Title}}</div>
-        <div class="audit-detail">
-          <div class="desc"><strong>{{.Severity}}</strong> — {{.OWASP}}</div>
-          <div class="desc">{{.Evidence}}</div>
-          {{if .Remediation}}<div class="val">Fix: {{.Remediation}}</div>{{end}}
+  <div class="section-title">Security Vulnerabilities</div>
+  <div class="findings-container">
+    {{range .Findings}}
+    <div class="finding-card">
+      <div class="card-header">
+        <div class="severity-pill pill-{{lower (print .Severity)}}">{{.Severity}}</div>
+        <div class="finding-info">
+          <div class="finding-title">{{.Title}}</div>
+          <div class="finding-owasp">{{.OWASP}}</div>
         </div>
       </div>
-      {{end}}
+      <div class="card-body">
+        <div class="evidence-block">
+          {{.Evidence}}
+        </div>
+        {{if .Remediation}}
+        <div class="remediation-box">
+          <strong>Recommended Fix</strong>
+          {{.Remediation}}
+        </div>
+        {{end}}
+
+        <details class="endpoints-drawer">
+          <summary class="drawer-trigger">
+            {{len .Endpoints}} AFFECTED ENDPOINTS
+          </summary>
+          <div class="url-list">
+            {{range .Endpoints}}
+            <div class="url-item">{{.}}</div>
+            {{end}}
+          </div>
+        </details>
+      </div>
     </div>
     {{else}}
-    <p style="color:var(--green);padding:.75rem 0">No findings detected.</p>
+    <div style="text-align:center; padding: 4rem; background: var(--surface); border-radius: var(--radius-lg); border: 1px dashed var(--border);">
+      <div style="font-size: 3rem; margin-bottom: 1rem;">🛡️</div>
+      <div style="font-weight: 700; font-size: 1.2rem; color: var(--green);">Zero Vulnerabilities Detected</div>
+      <div style="color: var(--text-muted); font-size: 0.9rem;">The target application appears to follow security best-practices.</div>
+    </div>
     {{end}}
   </div>
 
-  <!-- ── Discovered Endpoints ── -->
-  <div class="section">
-    <div class="section-title">Discovered Endpoints ({{len .Endpoints}})</div>
-    <table>
-      <thead>
-        <tr><th>Method</th><th>Source</th><th>URL</th><th>Parameters</th></tr>
-      </thead>
-      <tbody>
-        {{range .Endpoints}}
-        <tr>
-          <td><span class="status-badge {{if eq .Method "POST"}}status-5xx{{else}}status-2xx{{end}}">{{.Method}}</span></td>
-          <td>{{.Source}}</td>
-          <td class="h-name">{{.URL}}</td>
-          <td class="dim">{{if .Params}}{{join .Params ", "}}{{else}}—{{end}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- ── All response headers ── -->
-  <div class="section">
-    <div class="section-title">All Response Headers</div>
-    <table>
-      <thead>
-        <tr><th>Header</th><th>Value</th></tr>
-      </thead>
-      <tbody>
-        {{$h := .AllHeaders}}
-        {{range (sortedHeaders $h)}}
-        <tr>
-          <td class="h-name">{{.}}</td>
-          <td class="h-val">{{headerVal $h .}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
+  <div class="section-title">Surface Information</div>
+  <div class="summary-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+    <div class="summary-card" style="padding: 1.25rem;">
+      <div class="label">Network Signature</div>
+      <div class="value" style="font-size: 1.2rem; margin-top:0.5rem; display:flex; align-items:center; gap:0.5rem;">
+        <span style="padding: 0.2rem 0.5rem; background: rgba(0,242,255,0.1); color: var(--cyan); border-radius: 4px; font-size: 0.8rem; font-weight: 800;">{{.Status}}</span>
+        <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 400;">in {{.Duration.Milliseconds}}ms</span>
+      </div>
+    </div>
+    <div class="summary-card" style="padding: 1.25rem;">
+      <div class="label">Attack Surface</div>
+      <div class="value" style="font-size: 1.2rem; margin-top:0.5rem; color: var(--text);">
+        {{len .Endpoints}} <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 400;">Total Endpoints Discovered</span>
+      </div>
+    </div>
   </div>
 
   <footer>
-    GoSentinel &mdash; OWASP Top 10 Scanner &mdash; Report for <strong>{{.Target}}</strong>
+    GoSentinel Security Audit &bull; Generated by Engine v1.0.0 &bull; &copy; {{.ScannedAt.Format "2006"}}
   </footer>
 
 </body>
 </html>`
+
