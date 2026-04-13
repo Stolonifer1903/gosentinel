@@ -1,130 +1,66 @@
 # GoSentinel
 
-> A fast, concurrent OWASP Top 10 web vulnerability scanner built in Go.
+GoSentinel is a concurrent web vulnerability scanner designed for reconnaissance and security auditing. It combines a host-scoped BFS crawler with a pluggable scanning engine to identify common security misconfigurations and sensitive data exposure.
 
-GoSentinel is a CLI tool that scans a target web application for common security vulnerabilities and generates detailed HTML reports — powered by Go's concurrency model.
+## Core Functionality
 
----
+- **BFS Crawler**: A thread-safe spider that recursively discovers links and forms. It is restricted to the target host and its subdomains by default.
+- **Concurrent Engine**: Orchestrates multiple vulnerability modules in parallel using Go's concurrency primitives.
+- **Finding Aggregation**: Groups identical findings (e.g., missing headers on multiple pages) into single reports to reduce output noise.
+- **Aggregated HTML Reports**: Generates a scannable, dark-mode dashboard with expandable technical evidence.
 
-## Features
+## Security Modules
 
-- 🕵️ **BFS Web Crawler** — Recursively discovers links and forms while respecting `--depth`
-- 🛡️ **Security Header Audit** — Detects missing HSTS, CSP, X-Frame-Options, and more
-- 🔍 **Attack Surface Mapping** — Automatically extracts form inputs and parameters
-- 📄 **HTML Report Generation** — Self-contained dark-mode reports with full discovery logs
-- 🔒 **Domain Locking** — Safety controls to ensure the scanner stays within target boundaries
-- 🎨 **Premium Terminal UI** — Colour-coded, formatted output for clear reconnaissance
+| Module | Detection Type | Details |
+| :--- | :--- | :--- |
+| **Headers** | Passive | Audits CSP, HSTS, X-Frame-Options, and other security headers. |
+| **Sensitive** | Passive | Scans for AWS keys, private keys, tokens, and hardcoded secrets. |
+| **Leakage** | Passive | Identifies stack traces, debug error messages, and directory listings. |
 
-> **OWASP scanner modules** (SQLi, XSS, CSRF, etc.) are currently being integrated into the engine.
+## Quick Start
 
----
-
-## Installation
-
-**Requires Go 1.22+**
-
+### Build from source
 ```bash
-go install github.com/Stolonifer1903/gosentinel@latest
-```
-
-Or build from source:
-
-```bash
-git clone https://github.com/Stolonifer1903/gosentinel.git
-cd gosentinel
 go build -o gosentinel .
 ```
 
----
-
-## Usage
-
+### Basic usage
 ```bash
-# Basic scan + spidering (default depth 2)
-gosentinel scan --url https://example.com
+# Scan a target with default depth (2)
+./gosentinel scan --url https://example.com
 
-# Map deep attack surface (depth 5)
-gosentinel scan --url https://example.com --depth 5
-
-# Save discovery and audit results to an HTML report
-gosentinel scan --url https://example.com --output results.html
-
-# Verbose mode (shows full URLs and headers)
-gosentinel scan --url https://example.com -v
+# Map attack surface with custom depth and output report
+./gosentinel scan --url https://example.com --depth 4 --output report.html
 ```
 
----
+### Flags
+- `--url`: The target URL to scan (required).
+- `--depth`: Maximum crawl depth (default 2).
+- `--concurrency`: Number of concurrent workers (default 10).
+- `--output`: Path to save the HTML report.
+- `-v, --verbose`: Show detailed URLs and evidence in terminal output.
 
-## Example Output
+## Developer Guide
 
-```text
-────────────────────────────────────────────────────────────
- Target:  https://example.com
- Depth:   2
- Started: 2026-04-09 03:27:09
-────────────────────────────────────────────────────────────
+### Project Architecture
+- `cmd/`: CLI interface and command definitions.
+- `internal/scanner/`: Core orchestration logic and finding models.
+- `internal/crawler/`: BFS spider and reconnaissance logic.
+- `internal/report/`: HTML template and reporting logic.
 
-[~] Fetching response headers…
- Status: 200 OK   Time: 56ms
-
-[~] Spidering target (depth 2)…
- [✔] Discovered 3 endpoints
-
-  ┌─ Discovered Attack Surface 
-  │ GET    https://example.com
-  │ GET    https://example.com/about
-  │ POST   https://example.com/login [user, password]
-  └─
-
-  ┌─ Security Header Audit 
-  │ ✘ MISSING   Content-Security-Policy              CSP — mitigates XSS
-  │ ✘ MISSING   Strict-Transport-Security            HSTS — enforces HTTPS
-  │ ✘ MISSING   X-Frame-Options                      Clickjacking protection
-  └─
-
- [✘] 6 security headers missing — review recommended.
-
- [✔] Report saved → /Users/shreyyadav/GoSentinel/results.html
-```
-
----
-
-## Project Structure
-
-```
-gosentinel/
-├── cmd/
-│   ├── root.go          # CLI entry points and banners
-│   └── scan.go          # Core scan logic and output formatting
-├── internal/
-│   ├── crawler/
-│   │   └── crawler.go   # BFS spider, link & form extraction
-│   ├── httpclient/
-│   │   └── client.go    # Persistent HTTP client & header utilities
-│   └── report/
-│       └── html.go      # HTML template and report generation
-├── main.go
-└── go.mod
-```
-
----
-
-## Roadmap
-
-- [x] CLI scaffold (Cobra)
-- [x] HTTP header fetching
-- [x] Security header audit
-- [x] HTML report generation
-- [x] BFS web crawler (Spider) with `--depth`
-- [ ] SQLi detection module
-- [ ] XSS detection module
-- [ ] CSRF detection module
-- [ ] SSRF detection module
-- [ ] IDOR detection module
-- [ ] React dashboard (Web UI)
-
----
+### How to Build a Module
+1. Create a new file in `internal/scanner/modules/`.
+2. Implement the `Module` interface:
+   ```go
+   type Module interface {
+       Name() string
+       Run(ctx context.Context, endpoints []crawler.Endpoint) ([]scanner.Finding, error)
+   }
+   ```
+3. Register your module in `cmd/scan.go` inside the `runScan` function:
+   ```go
+   engine.RegisterModule(&modules.YourNewModule{})
+   ```
 
 ## License
-
 [MIT](LICENSE)
