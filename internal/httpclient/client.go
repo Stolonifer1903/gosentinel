@@ -31,6 +31,48 @@ var DefaultClient = &http.Client{
 	},
 }
 
+// ResponseResult holds the full response including the body.
+type ResponseResult struct {
+	URL        string
+	StatusCode int
+	Status     string
+	Headers    http.Header
+	Body       string
+	Duration   time.Duration
+}
+
+// Fetch performs an HTTP GET against the given URL and returns the full response
+// including the body as a string.
+func Fetch(url string) (*ResponseResult, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("building request: %w", err)
+	}
+	req.Header.Set("User-Agent", "GoSentinel/0.1 (security-scanner)")
+
+	start := time.Now()
+	resp, err := DefaultClient.Do(req)
+	elapsed := time.Since(start)
+	if err != nil {
+		return nil, fmt.Errorf("executing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+	return &ResponseResult{
+		URL:        url,
+		StatusCode: resp.StatusCode,
+		Status:     resp.Status,
+		Headers:    resp.Header,
+		Body:       string(bodyBytes),
+		Duration:   elapsed,
+	}, nil
+}
+
 // FetchHeaders performs an HTTP GET against the given URL and returns the
 // response status code, status text, and all response headers plus timing info.
 // The response body is discarded — we only care about headers at this stage.
