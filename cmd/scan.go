@@ -201,6 +201,7 @@ func printHeaders(r *httpclient.HeaderResult, verbose bool) {
 
 
 // writeReport dispatches to the right renderer based on the file extension.
+// It also ensures reports are saved in an organized directory structure.
 func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []scanner.GroupedFinding, endpoints []crawler.Endpoint) error {
 	result := &report.ScanResult{
 		Target:     target,
@@ -214,19 +215,32 @@ func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []
 	}
 
 	ext := strings.ToLower(filepath.Ext(outPath))
+	filename := filepath.Base(outPath)
+
+	// If no extension, default to .json as requested.
+	if ext == "" {
+		ext = ".json"
+		outPath += ".json"
+		filename += ".json"
+	}
+
+	var finalPath string
 	switch ext {
-	case ".html", ".htm", "":
-		if ext == "" {
-			outPath += ".html"
+	case ".json":
+		finalPath = filepath.Join("reports", "json", filename)
+		if err := report.WriteJSON(result, finalPath); err != nil {
+			return err
 		}
-		if err := report.WriteHTML(result, outPath); err != nil {
+	case ".html", ".htm":
+		finalPath = filepath.Join("reports", "html", filename)
+		if err := report.WriteHTML(result, finalPath); err != nil {
 			return err
 		}
 	default:
-		return fmt.Errorf("unsupported output format %q — only .html is supported right now", ext)
+		return fmt.Errorf("unsupported output format %q — only .html and .json are supported", ext)
 	}
 
-	abs, _ := filepath.Abs(outPath)
+	abs, _ := filepath.Abs(finalPath)
 	fmt.Printf(" %s Report saved → %s\n\n", green("[✔]"), cyan(abs))
 	return nil
 }
