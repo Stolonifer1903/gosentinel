@@ -10,55 +10,57 @@ import (
 	"github.com/Stolonifer1903/gosentinel/internal/crawler"
 	"github.com/Stolonifer1903/gosentinel/internal/httpclient"
 	"github.com/Stolonifer1903/gosentinel/internal/scanner"
+	"github.com/Stolonifer1903/gosentinel/internal/scanner/descriptions"
 )
 
-// securityHeaderChecks defines the full set of security headers the module
-// audits, keyed by lowercase canonical name.
-var securityHeaderChecks = map[string]headerCheck{
+// headerCheckInfo defines the metadata for a single security header check.
+// Each header is mapped to its CheckID, severity level, and remediation guidance.
+type headerCheckInfo struct {
+	CheckID     descriptions.CheckID
+	Severity    scanner.Severity
+	OWASP       string
+	Remediation string
+}
+
+// securityHeaderChecks defines the full set of security headers the module audits,
+// keyed by lowercase canonical name. CheckIDs are used to look up detailed descriptions.
+var securityHeaderChecks = map[string]headerCheckInfo{
 	"strict-transport-security": {
-		Description: "HSTS — enforces HTTPS connections",
+		CheckID:     descriptions.HeaderHSTSMissing,
 		Severity:    scanner.Medium,
 		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add 'Strict-Transport-Security: max-age=63072000; includeSubDomains; preload' to all HTTPS responses.",
 	},
 	"content-security-policy": {
-		Description: "CSP — mitigates XSS and data injection attacks",
+		CheckID:     descriptions.HeaderCSPMissing,
 		Severity:    scanner.High,
 		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Define a strict Content-Security-Policy header. Start with 'default-src \\'self\\'' and add directives as needed.",
 	},
 	"x-frame-options": {
-		Description: "Clickjacking protection",
+		CheckID:     descriptions.HeaderXFrameOptionsMissing,
 		Severity:    scanner.Medium,
 		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add 'X-Frame-Options: DENY' or 'SAMEORIGIN' to prevent the page from being embedded in iframes.",
 	},
 	"x-content-type-options": {
-		Description: "Prevents MIME-type sniffing",
+		CheckID:     descriptions.HeaderXContentTypeMissing,
 		Severity:    scanner.Low,
 		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add 'X-Content-Type-Options: nosniff' to instruct browsers not to guess content types.",
 	},
 	"referrer-policy": {
-		Description: "Controls referrer information leakage",
+		CheckID:     descriptions.HeaderReferrerPolicyMissing,
 		Severity:    scanner.Low,
 		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add 'Referrer-Policy: no-referrer' or 'strict-origin-when-cross-origin'.",
 	},
 	"permissions-policy": {
-		Description: "Restricts access to browser features (camera, geolocation, etc.)",
+		CheckID:     descriptions.HeaderPermissionsPolicyMissing,
 		Severity:    scanner.Low,
 		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add a 'Permissions-Policy' header to explicitly restrict feature access.",
 	},
-}
-
-// headerCheck holds the metadata for a single header rule.
-type headerCheck struct {
-	Description string
-	Severity    scanner.Severity
-	OWASP       string
-	Remediation string
 }
 
 // HeadersModule checks security-relevant HTTP response headers.
@@ -96,7 +98,7 @@ func (m *HeadersModule) Run(ctx context.Context, endpoints []crawler.Endpoint) (
 }
 
 // auditHeaders compares the given headers against the checklist and returns
-// one Finding per missing header.
+// one Finding per missing header, with descriptions populated from the central registry.
 func auditHeaders(targetURL string, headers http.Header) []scanner.Finding {
 	var findings []scanner.Finding
 
@@ -114,6 +116,7 @@ func auditHeaders(targetURL string, headers http.Header) []scanner.Finding {
 				Title:       "Missing Security Header: " + canonicalHeader(headerKey),
 				Severity:    check.Severity,
 				OWASP:       check.OWASP,
+				Description: descriptions.GetDescription(check.CheckID),
 				URL:         targetURL,
 				Method:      "GET",
 				Evidence:    "Header '" + canonicalHeader(headerKey) + "' was not present in the response.",

@@ -33,6 +33,8 @@ type Finding struct {
 	Severity Severity
 	// OWASP is the relevant OWASP Top 10 category (e.g. "A05:2021").
 	OWASP string
+	// Description is a detailed explanation of the vulnerability.
+	Description string
 	// URL is the affected endpoint.
 	URL string
 	// Method is the HTTP method used (GET, POST, etc.).
@@ -57,6 +59,7 @@ type GroupedFinding struct {
 	Title       string
 	Severity    Severity
 	OWASP       string
+	Description string
 	Evidence    string
 	Remediation string
 	Endpoints   []string

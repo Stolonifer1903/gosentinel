@@ -31,8 +31,8 @@ type Result struct {
 // endpoints, then merges and sorts the findings.
 func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result, error) {
 	var (
-		mu       sync.Mutex
-		wg       sync.WaitGroup
+		mu          sync.Mutex
+		wg          sync.WaitGroup
 		allFindings []Finding
 	)
 
@@ -70,6 +70,7 @@ func (r *Result) Group() []GroupedFinding {
 		title       string
 		severity    Severity
 		owasp       string
+		description string
 		evidence    string
 		remediation string
 	}
@@ -82,6 +83,7 @@ func (r *Result) Group() []GroupedFinding {
 			title:       f.Title,
 			severity:    f.Severity,
 			owasp:       f.OWASP,
+			description: f.Description,
 			evidence:    f.Evidence,
 			remediation: f.Remediation,
 		}
@@ -103,6 +105,7 @@ func (r *Result) Group() []GroupedFinding {
 				Title:       f.Title,
 				Severity:    f.Severity,
 				OWASP:       f.OWASP,
+				Description: f.Description,
 				Evidence:    f.Evidence,
 				Remediation: f.Remediation,
 				Endpoints:   []string{f.URL},
@@ -123,4 +126,3 @@ func (r *Result) Group() []GroupedFinding {
 
 	return result
 }
-
