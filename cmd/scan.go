@@ -105,6 +105,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("%s Running vulnerability checks…\n", cyan("[~]"))
 	activeModules := []scanner.Module{
 		&modules.HeadersModule{},
+		&modules.SensitiveModule{},
 	}
 	engine := scanner.NewEngine(activeModules)
 	scanResult, err := engine.Run(cmd.Context(), endpoints)
