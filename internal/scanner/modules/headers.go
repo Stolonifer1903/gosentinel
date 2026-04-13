@@ -18,7 +18,6 @@ import (
 type headerCheckInfo struct {
 	CheckID     descriptions.CheckID
 	Severity    scanner.Severity
-	OWASP       string
 	Remediation string
 }
 
@@ -28,37 +27,31 @@ var securityHeaderChecks = map[string]headerCheckInfo{
 	"strict-transport-security": {
 		CheckID:     descriptions.HeaderHSTSMissing,
 		Severity:    scanner.Medium,
-		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add 'Strict-Transport-Security: max-age=63072000; includeSubDomains; preload' to all HTTPS responses.",
 	},
 	"content-security-policy": {
 		CheckID:     descriptions.HeaderCSPMissing,
 		Severity:    scanner.High,
-		OWASP:       "A05:2021 - Security Misconfiguration",
-		Remediation: "Define a strict Content-Security-Policy header. Start with 'default-src \\'self\\'' and add directives as needed.",
+		Remediation: "Define a strict Content-Security-Policy header. Start with 'default-src 'self'' and add directives as needed.",
 	},
 	"x-frame-options": {
 		CheckID:     descriptions.HeaderXFrameOptionsMissing,
 		Severity:    scanner.Medium,
-		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add 'X-Frame-Options: DENY' or 'SAMEORIGIN' to prevent the page from being embedded in iframes.",
 	},
 	"x-content-type-options": {
 		CheckID:     descriptions.HeaderXContentTypeMissing,
 		Severity:    scanner.Low,
-		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add 'X-Content-Type-Options: nosniff' to instruct browsers not to guess content types.",
 	},
 	"referrer-policy": {
 		CheckID:     descriptions.HeaderReferrerPolicyMissing,
 		Severity:    scanner.Low,
-		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add 'Referrer-Policy: no-referrer' or 'strict-origin-when-cross-origin'.",
 	},
 	"permissions-policy": {
 		CheckID:     descriptions.HeaderPermissionsPolicyMissing,
 		Severity:    scanner.Low,
-		OWASP:       "A05:2021 - Security Misconfiguration",
 		Remediation: "Add a 'Permissions-Policy' header to explicitly restrict feature access.",
 	},
 }
@@ -66,7 +59,7 @@ var securityHeaderChecks = map[string]headerCheckInfo{
 // HeadersModule checks security-relevant HTTP response headers.
 type HeadersModule struct{}
 
-func (m *HeadersModule) Name() string { return "Security Headers (A05)" }
+func (m *HeadersModule) Name() string { return "Security Headers" }
 
 // Run fetches the root URL from each unique host in the endpoint list
 // and checks for missing or misconfigured security headers.
@@ -115,7 +108,7 @@ func auditHeaders(targetURL string, headers http.Header) []scanner.Finding {
 			findings = append(findings, scanner.Finding{
 				Title:       "Missing Security Header: " + canonicalHeader(headerKey),
 				Severity:    check.Severity,
-				OWASP:       check.OWASP,
+				OWASP:       descriptions.GetCategory(check.CheckID),
 				Description: descriptions.GetDescription(check.CheckID),
 				URL:         targetURL,
 				Method:      "GET",
