@@ -3,6 +3,7 @@ gosentinel
 gosentinel.exe
 
 # Generated reports — don't commit scan output
+reports/
 *.html
 *.pdf
 
@@ -18,5 +19,5 @@ gosentinel.exe
 *.out
 
 # Project documentation
-PROJECT_PLAN.md
+PROJECT_PLAN.txt
 implementation_plan.md

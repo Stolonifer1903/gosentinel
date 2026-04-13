@@ -1,47 +1,67 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-cyan: #00e5ff;
-  --color-brand-bg: #0d0f14;
-  --color-brand-surface: #13161e;
-  --color-brand-border: #1e2330;
-  --color-brand-text: #e2e8f0;
-  --color-brand-muted: #64748b;
-  
-  --font-sans: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  /* Core Palette - Neutrals */
+  --color-brand-bg: #09090b; /* Slate 950 */
+  --color-brand-surface: #18181b; /* Zinc 900 */
+  --color-brand-border: #27272a; /* Zinc 800 */
+  --color-brand-text: #fafafa; /* Zinc 50 */
+  --color-brand-muted: #71717a; /* Zinc 500 */
+
+  /* Primary Accent */
+  --color-brand-cyan: #2dd4bf; /* Teal 400 - Vercel style accent */
+
+  /* Semantic Colors - Strictly Functional */
+  --color-severity-critical: #ef4444; /* Red 500 */
+  --color-severity-high: #f97316; /* Orange 500 */
+  --color-severity-medium: #f59e0b; /* Amber 500 */
+  --color-severity-low: #38bdf8; /* Sky 400 */
+  --color-severity-info: #71717a; /* Zinc 500 */
+  --color-severity-safe: #10b981; /* Emerald 500 */
+
+  /* Typography */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Geist Mono", monospace;
 }
 
-:root {
-  background-color: var(--color-brand-bg);
-  color: var(--color-brand-text);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  :root {
+    background-color: var(--color-brand-bg);
+    color: var(--color-brand-text);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--font-sans);
+  }
 }
 
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-/* Custom Scrollbar */
+/* Custom Scrollbar - Vercel Style (Minimal) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-brand-bg);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--color-brand-border);
-  border-radius: 4px;
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-brand-muted);
+}
+
+/* Custom Selection */
+::selection {
+  background-color: rgba(45, 212, 191, 0.2);
+  color: var(--color-brand-cyan);
 }
