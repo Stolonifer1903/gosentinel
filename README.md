@@ -48,6 +48,16 @@ go build -o gosentinel .
 - `internal/crawler/`: BFS spider and reconnaissance logic.
 - `internal/report/`: HTML template and reporting logic.
 
+### Web Dashboard (Experimental)
+A React + Vite based dashboard for visualizing large scan datasets is located in the `web/` directory.
+
+To start the development server:
+```bash
+cd web
+yarn install
+yarn dev
+```
+
 ### How to Build a Module
 1. Create a new file in `internal/scanner/modules/`.
 2. Implement the `Module` interface:
