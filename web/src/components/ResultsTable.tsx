@@ -1,169 +1,191 @@
-
-import { 
-  CheckCircle2, 
-  XCircle, 
-  AlertTriangle, 
-  ExternalLink, 
-  Clock, 
-  Zap 
-} from 'lucide-react'
+import {
+  AlertTriangle,
+  ExternalLink,
+  Clock,
+  Zap,
+  ShieldCheck,
+  ShieldAlert,
+} from "lucide-react";
 
 interface ScanResult {
   id: string;
-  target: string;
-  status: number;
-  statusText: string;
-  headerCount: number;
-  totalHeaders: number;
-  duration: number;
-  scannedAt: string;
+  Target: string;
+  Status: number;
+  StatusText: string;
+  HeaderCount: number;
+  TotalHeaders: number;
+  Duration: number;
+  ScannedAt: string;
 }
 
 const mockData: ScanResult[] = [
   {
-    id: '1',
-    target: 'https://owasp.org',
-    status: 200,
-    statusText: 'OK',
-    headerCount: 8,
-    totalHeaders: 8,
-    duration: 142,
-    scannedAt: '2 mins ago'
+    id: "1",
+    Target: "https://owasp.org",
+    Status: 200,
+    StatusText: "OK",
+    HeaderCount: 8,
+    TotalHeaders: 8,
+    Duration: 142,
+    ScannedAt: "2 mins ago",
   },
   {
-    id: '2',
-    target: 'https://google.com',
-    status: 301,
-    statusText: 'Moved',
-    headerCount: 6,
-    totalHeaders: 8,
-    duration: 89,
-    scannedAt: '12 mins ago'
+    id: "2",
+    Target: "https://google.com",
+    Status: 301,
+    StatusText: "Moved",
+    HeaderCount: 6,
+    TotalHeaders: 8,
+    Duration: 89,
+    ScannedAt: "12 mins ago",
   },
   {
-    id: '3',
-    target: 'https://vulnerable-site.io',
-    status: 200,
-    statusText: 'OK',
-    headerCount: 2,
-    totalHeaders: 8,
-    duration: 310,
-    scannedAt: '45 mins ago'
+    id: "3",
+    Target: "https://vulnerable-site.io",
+    Status: 200,
+    StatusText: "OK",
+    HeaderCount: 2,
+    TotalHeaders: 8,
+    Duration: 310,
+    ScannedAt: "45 mins ago",
   },
   {
-    id: '4',
-    target: 'https://api.github.com',
-    status: 200,
-    statusText: 'OK',
-    headerCount: 7,
-    totalHeaders: 8,
-    duration: 156,
-    scannedAt: '1 hour ago'
+    id: "4",
+    Target: "https://api.github.com",
+    Status: 200,
+    StatusText: "OK",
+    HeaderCount: 7,
+    TotalHeaders: 8,
+    Duration: 156,
+    ScannedAt: "1 hour ago",
   },
   {
-    id: '5',
-    target: 'https://developer.mozilla.org',
-    status: 200,
-    statusText: 'OK',
-    headerCount: 8,
-    totalHeaders: 8,
-    duration: 210,
-    scannedAt: '3 hours ago'
-  }
-]
+    id: "5",
+    Target: "https://developer.mozilla.org",
+    Status: 200,
+    StatusText: "OK",
+    HeaderCount: 8,
+    TotalHeaders: 8,
+    Duration: 210,
+    ScannedAt: "3 hours ago",
+  },
+];
 
 function ResultsTable() {
   return (
-    <table className="w-full text-sm text-left border-collapse">
-      <thead className="bg-brand-bg/50 text-brand-muted uppercase text-xs tracking-wider">
+    <table className="w-full text-left border-collapse table-fixed">
+      <thead className="bg-brand-surface/50 text-brand-muted uppercase text-[10px] font-bold tracking-widest">
         <tr>
-          <th className="px-6 py-4 font-semibold">Target URL</th>
-          <th className="px-6 py-4 font-semibold text-center">HTTP Status</th>
-          <th className="px-6 py-4 font-semibold text-center">Security Health</th>
-          <th className="px-6 py-4 font-semibold text-center">Duration</th>
-          <th className="px-6 py-4 font-semibold text-right">Scanned</th>
+          <th className="px-5 py-3 w-1/3">Endpoint</th>
+          <th className="px-5 py-3 w-32 text-center">Status</th>
+          <th className="px-5 py-3 text-center">Security Health</th>
+          <th className="px-5 py-3 w-32 text-right">Activity</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-brand-border/50">
         {mockData.map((scan) => (
-          <tr key={scan.id} className="hover:bg-brand-cyan/5 transition-colors group">
-            <td className="px-6 py-4">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-brand-cyan truncate max-w-[240px]">{scan.target}</span>
-                <ExternalLink size={14} className="text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" />
+          <tr
+            key={scan.id}
+            className="hover:bg-brand-surface transition-colors group"
+          >
+            <td className="px-5 py-3">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <span className="font-mono text-xs text-brand-cyan truncate">
+                  {scan.Target}
+                </span>
+                <ExternalLink
+                  size={10}
+                  className="text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex-shrink-0"
+                />
               </div>
             </td>
-            <td className="px-6 py-4">
+            <td className="px-5 py-3">
               <div className="flex justify-center">
-                <StatusBadge code={scan.status} text={scan.statusText} />
+                <StatusBadge code={scan.Status} text={scan.StatusText} />
               </div>
             </td>
-            <td className="px-6 py-4">
+            <td className="px-5 py-3">
               <div className="flex justify-center">
-                <HealthIndicator current={scan.headerCount} total={scan.totalHeaders} />
+                <HealthIndicator
+                  current={scan.HeaderCount}
+                  total={scan.TotalHeaders}
+                />
               </div>
             </td>
-            <td className="px-6 py-4">
-              <div className="flex items-center justify-center gap-1.5 text-brand-muted">
-                <Zap size={14} className="text-brand-cyan/70" />
-                <span>{scan.duration}ms</span>
-              </div>
-            </td>
-            <td className="px-6 py-4 text-right text-brand-muted font-medium">
-              <div className="flex items-center justify-end gap-1.5">
-                <Clock size={14} />
-                <span>{scan.scannedAt}</span>
+            <td className="px-5 py-3">
+              <div className="flex flex-col items-end gap-0.5 text-[10px] font-mono text-brand-muted">
+                <div className="flex items-center gap-1">
+                  <Zap size={10} className="text-brand-cyan/60" />
+                  <span>{scan.Duration}ms</span>
+                </div>
+                <div className="flex items-center gap-1 opacity-60">
+                  <Clock size={10} />
+                  <span>{scan.ScannedAt}</span>
+                </div>
               </div>
             </td>
           </tr>
         ))}
       </tbody>
     </table>
-  )
+  );
 }
 
 function StatusBadge({ code, text }: { code: number; text: string }) {
-  let colorClass = 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20';
-  if (code >= 200 && code < 300) colorClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-  if (code >= 300 && code < 400) colorClass = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-  if (code >= 400 && code < 500) colorClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-  if (code >= 500) colorClass = 'bg-red-500/10 text-red-500 border-red-500/20';
+  let colorClass = "text-brand-cyan border-brand-cyan/20 bg-brand-cyan/5";
+  if (code >= 200 && code < 300)
+    colorClass =
+      "text-severity-safe border-severity-safe/20 bg-severity-safe/5";
+  if (code >= 300 && code < 400)
+    colorClass = "text-brand-muted border-brand-border bg-brand-surface";
+  if (code >= 400 && code < 500)
+    colorClass =
+      "text-severity-medium border-severity-medium/20 bg-severity-medium/5";
+  if (code >= 500)
+    colorClass =
+      "text-severity-critical border-severity-critical/20 bg-severity-critical/5";
 
   return (
-    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${colorClass} flex items-center gap-1 w-fit`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${code >= 200 && code < 300 ? 'bg-emerald-400' : 'bg-current'}`}></span>
+    <span
+      className={`px-2 py-0.5 rounded border ${colorClass} text-[10px] font-bold uppercase tracking-wide`}
+    >
       {code} {text}
     </span>
-  )
+  );
 }
 
-function HealthIndicator({ current, total }: { current: number; total: number }) {
+function HealthIndicator({
+  current,
+  total,
+}: {
+  current: number;
+  total: number;
+}) {
   const percentage = (current / total) * 100;
-  let colorClass = 'text-brand-cyan';
-  let Icon = CheckCircle2;
-  
+  let colorClass = "bg-brand-cyan";
+  let Icon = ShieldCheck;
+
   if (percentage < 50) {
-    colorClass = 'text-red-400';
-    Icon = XCircle;
+    colorClass = "bg-severity-critical";
+    Icon = ShieldAlert;
   } else if (percentage < 100) {
-    colorClass = 'text-amber-400';
+    colorClass = "bg-severity-medium";
     Icon = AlertTriangle;
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Icon size={16} className={colorClass} />
-      <div className="w-24 h-1.5 bg-brand-border rounded-full overflow-hidden">
-        <div 
-          className={`h-full transition-all duration-500 ${
-            percentage === 100 ? 'bg-brand-cyan' : percentage < 50 ? 'bg-red-400' : 'bg-amber-400'
-          }`} 
+    <div className="flex items-center justify-center gap-3">
+      <div className="w-20 h-1 bg-brand-border rounded-full overflow-hidden flex-shrink-0">
+        <div
+          className={`h-full transition-all duration-500 ${colorClass}`}
           style={{ width: `${percentage}%` }}
         ></div>
       </div>
-      <span className="text-xs font-bold text-brand-muted w-8">{current}/{total}</span>
+      <span className="text-[10px] font-mono font-bold text-brand-muted min-w-[32px]">
+        {current}/{total}
+      </span>
     </div>
-  )
+  );
 }
 
-export default ResultsTable
+export default ResultsTable;
