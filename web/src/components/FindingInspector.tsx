@@ -1,4 +1,5 @@
-import { X, ExternalLink, ShieldAlert, Award, Terminal } from "lucide-react";
+import { useState } from "react";
+import { X, ExternalLink, ShieldAlert, Award, Terminal, Copy, Check } from "lucide-react";
 import type { GroupedFinding } from "../types/scan";
 import { SeverityIndicator } from "./VulnerabilityTable";
 
@@ -8,26 +9,35 @@ interface Props {
 }
 
 function FindingInspector({ finding, onClose }: Props) {
+  const [copied, setCopied] = useState(false);
+
   if (!finding) return null;
+
+  const handleCopyAll = () => {
+    const urls = finding.Endpoints.map((e) => e.URL).join("\n");
+    navigator.clipboard.writeText(urls);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-brand-bg/60 backdrop-blur-sm z-40 transition-opacity"
+        className="fixed inset-0 bg-brand-bg/80 backdrop-blur-md z-40 transition-opacity"
         onClick={onClose}
       />
 
-      {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-brand-bg border-l border-brand-border z-50 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
+      {/* Centered Modal */}
+      <div className="fixed inset-4 md:inset-10 lg:inset-20 max-w-6xl mx-auto bg-brand-bg border border-brand-border z-50 flex flex-col shadow-2xl rounded-xl overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="p-6 border-b border-brand-border flex items-start justify-between bg-brand-surface/30">
-          <div className="flex flex-col gap-3">
+        <div className="px-6 py-4 border-b border-brand-border flex items-center justify-between bg-brand-surface/30">
+          <div className="flex items-center gap-4">
             <SeverityIndicator severity={finding.Severity} />
             <h2 className="text-xl font-bold tracking-tight text-brand-text">
               {finding.Title}
             </h2>
-            <div className="flex items-center gap-2 text-[12px] font-mono text-brand-muted uppercase tracking-widest">
+            <div className="flex items-center gap-2 px-3 py-1 bg-brand-surface border border-brand-border rounded-full text-[11px] font-mono text-brand-muted uppercase tracking-widest">
               <ShieldAlert size={12} className="text-brand-cyan" />
               {finding.OWASP}
             </div>
@@ -40,54 +50,90 @@ function FindingInspector({ finding, onClose }: Props) {
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
-          {/* Description */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2">
-              <InfoIcon size={14} /> Description
-            </h3>
-            <p className="text-sm text-brand-text leading-relaxed opacity-90">
-              {finding.Description ||
-                "Detailed analysis of the security finding goes here. This vulnerability was identified during an automated scan of the target endpoints."}
-            </p>
-          </section>
-
-          {/* Remediation */}
-          <section className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2">
-              <Award size={14} /> Remediation Strategy
-            </h3>
-            <div className="p-4 bg-severity-safe/5 border border-severity-safe/20 rounded-lg">
-              <p className="text-sm text-brand-text leading-relaxed">
-                {finding.Remediation}
+        {/* Content - Split View */}
+        <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+          {/* Left Pane: Context */}
+          <div className="w-full md:w-2/5 border-r border-brand-border overflow-y-auto p-6 md:p-8 space-y-8 bg-brand-bg/50 custom-scrollbar">
+            {/* Description */}
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2">
+                <InfoIcon size={14} /> Description
+              </h3>
+              <p className="text-sm text-brand-text leading-relaxed opacity-90">
+                {finding.Description ||
+                  "Detailed analysis of the security finding goes here. This vulnerability was identified during an automated scan of the target endpoints."}
               </p>
-            </div>
-          </section>
+            </section>
 
-          {/* Endpoints */}
-          <section className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2">
-              <Terminal size={14} /> Affected Resources (
-              {finding.Endpoints.length})
-            </h3>
-            <div className="space-y-2">
-              {finding.Endpoints.map((url, i) => (
+            {/* Remediation */}
+            <section className="space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2">
+                <Award size={14} /> Remediation Strategy
+              </h3>
+              <div className="p-4 bg-severity-safe/5 border border-severity-safe/20 rounded-lg">
+                <p className="text-sm text-brand-text leading-relaxed">
+                  {finding.Remediation}
+                </p>
+              </div>
+            </section>
+          </div>
+
+          {/* Right Pane: Affected Resources */}
+          <div className="w-full md:w-3/5 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2">
+                <Terminal size={14} /> Affected Resources ({finding.Endpoints.length})
+              </h3>
+              <button
+                onClick={handleCopyAll}
+                className="flex items-center gap-2 px-3 py-1.5 bg-brand-surface hover:bg-brand-border border border-brand-border rounded text-[11px] font-bold uppercase tracking-wider text-brand-muted hover:text-brand-text transition-all"
+              >
+                {copied ? (
+                  <Check size={14} className="text-severity-safe" />
+                ) : (
+                  <Copy size={14} />
+                )}
+                {copied ? "Copied!" : "Copy URLs"}
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {finding.Endpoints.map((endpoint, i) => (
                 <div
                   key={i}
-                  className="group flex items-center justify-between p-3 bg-brand-surface border border-brand-border rounded hover:border-brand-cyan/30 transition-all font-mono text-xs"
+                  className="flex flex-col border border-brand-border rounded overflow-hidden bg-brand-bg group transition-colors hover:border-brand-cyan/50"
                 >
-                  <span className="text-brand-cyan truncate max-w-[400px]">
-                    {url}
-                  </span>
-                  <ExternalLink
-                    size={12}
-                    className="text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex-shrink-0"
-                  />
+                  {/* URL Header */}
+                  <div className="flex items-center justify-between p-3 bg-brand-surface/50 border-b border-brand-border">
+                    <span className="font-mono text-[13px] text-brand-cyan break-all pr-4">
+                      {endpoint.URL}
+                    </span>
+                    <a
+                      href={endpoint.URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-muted hover:text-brand-cyan transition-colors"
+                      title="Open URL"
+                    >
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+
+                  {/* Evidence Block */}
+                  {endpoint.Detail && (
+                    <div className="p-4 bg-black/40 font-mono text-[11px] leading-relaxed text-brand-muted">
+                      <div className="mb-2 text-[9px] uppercase tracking-widest text-brand-muted/50 border-b border-brand-border/50 pb-1">
+                        Evidence / Pattern Match
+                      </div>
+                      <pre className="whitespace-pre-wrap break-all text-brand-text/90">
+                        {endpoint.Detail}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
-          </section>
+          </div>
         </div>
 
         {/* Footer */}
@@ -96,7 +142,7 @@ function FindingInspector({ finding, onClose }: Props) {
             onClick={onClose}
             className="px-6 py-2 bg-brand-cyan text-brand-bg text-xs font-bold uppercase tracking-widest rounded hover:bg-brand-cyan/90 transition-all"
           >
-            Acknowledged
+            Acknowledge & Close
           </button>
         </div>
       </div>
