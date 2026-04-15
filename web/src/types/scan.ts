@@ -4,13 +4,18 @@ export interface FindingInstance {
   Evidence: string;
 }
 
+export interface AffectedEndpoint {
+  URL: string;
+  Detail: string;
+}
+
 export interface GroupedFinding {
   Title: string;
   Description: string;
   Severity: 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
   OWASP: string;
   Remediation: string;
-  Endpoints: string[];
+  Endpoints: AffectedEndpoint[];
 }
 
 export interface Endpoint {

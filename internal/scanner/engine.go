@@ -91,14 +91,14 @@ func (r *Result) Group() []GroupedFinding {
 		if g, ok := groups[k]; ok {
 			// Check for URL deduplication within the group
 			exists := false
-			for _, url := range g.Endpoints {
-				if url == f.URL {
+			for _, end := range g.Endpoints {
+				if end.URL == f.URL && end.Detail == f.EndpointDetail {
 					exists = true
 					break
 				}
 			}
 			if !exists {
-				g.Endpoints = append(g.Endpoints, f.URL)
+				g.Endpoints = append(g.Endpoints, AffectedEndpoint{URL: f.URL, Detail: f.EndpointDetail})
 			}
 		} else {
 			groups[k] = &GroupedFinding{
@@ -108,7 +108,7 @@ func (r *Result) Group() []GroupedFinding {
 				Description: f.Description,
 				Evidence:    f.Evidence,
 				Remediation: f.Remediation,
-				Endpoints:   []string{f.URL},
+				Endpoints:   []AffectedEndpoint{{URL: f.URL, Detail: f.EndpointDetail}},
 			}
 			order = append(order, k)
 		}

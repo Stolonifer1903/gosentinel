@@ -41,6 +41,8 @@ type Finding struct {
 	Method string
 	// Parameter is the affected query/form parameter, if applicable.
 	Parameter string
+	// EndpointDetail provides specific details for this endpoint (e.g. parameter lists) that shouldn't break grouping.
+	EndpointDetail string
 	// Evidence is a short snippet showing proof of the issue.
 	Evidence string
 	// Remediation is actionable advice for the developer.
@@ -54,6 +56,11 @@ func (f Finding) Rank() int {
 	return severityRank[f.Severity]
 }
 
+type AffectedEndpoint struct {
+	URL    string
+	Detail string
+}
+
 // GroupedFinding represents a collection of identical findings across multiple endpoints.
 type GroupedFinding struct {
 	Title       string
@@ -62,7 +69,7 @@ type GroupedFinding struct {
 	Description string
 	Evidence    string
 	Remediation string
-	Endpoints   []string
+	Endpoints   []AffectedEndpoint
 }
 
 // Rank returns the numeric rank for severity-based sorting of grouped findings.

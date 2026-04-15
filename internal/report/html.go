@@ -597,7 +597,10 @@ const htmlTemplate = `<!DOCTYPE html>
                 <span class="section-label">{{len $finding.Endpoints}} Affected Endpoints</span>
                 <div class="endpoint-list">
                   {{range $finding.Endpoints}}
-                  <div class="endpoint-item">{{.}}</div>
+                  <div class="endpoint-item">
+                    {{.URL}}
+                    {{if .Detail}}<span style="color: var(--cyan); margin-left:10px;">[{{.Detail}}]</span>{{end}}
+                  </div>
                   {{end}}
                 </div>
               </div>
