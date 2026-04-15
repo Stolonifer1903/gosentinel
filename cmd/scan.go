@@ -106,6 +106,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	activeModules := []scanner.Module{
 		&modules.HeadersModule{},
 		&modules.SensitiveModule{},
+		&modules.CSRFModule{},
 	}
 	engine := scanner.NewEngine(activeModules)
 	scanResult, err := engine.Run(cmd.Context(), endpoints)
@@ -274,7 +275,11 @@ func printFindings(findings []scanner.GroupedFinding, verbose bool) {
 
 		if verbose {
 			for _, u := range f.Endpoints {
-				fmt.Printf("  %s           %s\n", dim("│"), dim("→ %s", u))
+				if u.Detail != "" {
+					fmt.Printf("  %s           %s %s\n", dim("│"), dim("→ %s", u.URL), dim("[%s]", u.Detail))
+				} else {
+					fmt.Printf("  %s           %s\n", dim("│"), dim("→ %s", u.URL))
+				}
 			}
 		}
 	}
