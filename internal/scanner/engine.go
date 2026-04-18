@@ -70,6 +70,7 @@ func (r *Result) Group() []GroupedFinding {
 		title       string
 		severity    Severity
 		owasp       string
+		confidence  string
 		description string
 		evidence    string
 		remediation string
@@ -83,6 +84,7 @@ func (r *Result) Group() []GroupedFinding {
 			title:       f.Title,
 			severity:    f.Severity,
 			owasp:       f.OWASP,
+			confidence:  f.Confidence,
 			description: f.Description,
 			evidence:    f.Evidence,
 			remediation: f.Remediation,
@@ -105,6 +107,7 @@ func (r *Result) Group() []GroupedFinding {
 				Title:       f.Title,
 				Severity:    f.Severity,
 				OWASP:       f.OWASP,
+				Confidence:  f.Confidence,
 				Description: f.Description,
 				Evidence:    f.Evidence,
 				Remediation: f.Remediation,

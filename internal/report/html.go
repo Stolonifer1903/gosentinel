@@ -31,13 +31,7 @@ type ScanResult struct {
 
 // WriteHTML renders the scan result as a self-contained HTML file to outPath.
 func WriteHTML(result *ScanResult, outPath string) error {
-	// Pre-calculate severity counts if not already done
-	if result.SeverityCounts == nil {
-		result.SeverityCounts = make(map[string]int)
-		for _, f := range result.Findings {
-			result.SeverityCounts[string(f.Severity)]++
-		}
-	}
+	prepareScanResult(result)
 
 	// Ensure the output directory exists.
 	if dir := filepath.Dir(outPath); dir != "." {
@@ -557,6 +551,9 @@ const htmlTemplate = `<!DOCTYPE html>
             <div class="finding-cell">
               <span class="finding-title">{{$finding.Title}}</span>
               <span class="finding-owasp">{{$finding.OWASP}}</span>
+              {{if $finding.Confidence}}
+              <span class="finding-owasp">Confidence: {{$finding.Confidence}}</span>
+              {{end}}
               {{if $finding.Description}}
               <span class="finding-description">{{$finding.Description}}</span>
               {{end}}
@@ -579,6 +576,13 @@ const htmlTemplate = `<!DOCTYPE html>
               <div class="details-section">
                 <span class="section-label">Evidence</span>
                 <div class="evidence-block">{{$finding.Evidence}}</div>
+              </div>
+              {{end}}
+
+              {{if $finding.Confidence}}
+              <div class="details-section">
+                <span class="section-label">Confidence</span>
+                <div class="evidence-block">{{$finding.Confidence}}</div>
               </div>
               {{end}}
 

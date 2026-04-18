@@ -41,6 +41,9 @@ function FindingInspector({ finding, onClose }: Props) {
               <ShieldAlert size={12} className="text-brand-cyan" />
               {finding.OWASP}
             </div>
+            <div className="px-3 py-1 bg-brand-surface border border-brand-border rounded-full text-[11px] font-mono text-brand-muted uppercase tracking-widest">
+              {finding.Confidence}
+            </div>
           </div>
           <button
             onClick={onClose}

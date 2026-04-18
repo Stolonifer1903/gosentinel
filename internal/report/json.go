@@ -5,17 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/Stolonifer1903/gosentinel/internal/scanner"
 )
 
 // WriteJSON renders the scan result as a JSON file to outPath.
 func WriteJSON(result *ScanResult, outPath string) error {
-	// Pre-calculate severity counts if not already done
-	if result.SeverityCounts == nil {
-		result.SeverityCounts = make(map[string]int)
-		for _, f := range result.Findings {
-			result.SeverityCounts[string(f.Severity)]++
-		}
-	}
+	prepareScanResult(result)
 
 	// Ensure the output directory exists.
 	if dir := filepath.Dir(outPath); dir != "." {
@@ -37,4 +33,22 @@ func WriteJSON(result *ScanResult, outPath string) error {
 	}
 
 	return nil
+}
+
+func prepareScanResult(result *ScanResult) {
+	result.SeverityCounts = newSeverityCounts()
+
+	for _, f := range result.Findings {
+		result.SeverityCounts[string(f.Severity)]++
+	}
+}
+
+func newSeverityCounts() map[string]int {
+	return map[string]int{
+		string(scanner.Critical): 0,
+		string(scanner.High):     0,
+		string(scanner.Medium):   0,
+		string(scanner.Low):      0,
+		string(scanner.Info):     0,
+	}
 }

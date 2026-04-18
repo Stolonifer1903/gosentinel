@@ -14,6 +14,7 @@ export interface GroupedFinding {
   Description: string;
   Severity: 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
   OWASP: string;
+  Confidence: string;
   Remediation: string;
   Endpoints: AffectedEndpoint[];
 }

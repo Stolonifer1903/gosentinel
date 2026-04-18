@@ -33,6 +33,8 @@ type Finding struct {
 	Severity Severity
 	// OWASP is the relevant OWASP Top 10 category (e.g. "A05:2021").
 	OWASP string
+	// Confidence describes how strongly the scanner validated the issue.
+	Confidence string
 	// Description is a detailed explanation of the vulnerability.
 	Description string
 	// URL is the affected endpoint.
@@ -66,6 +68,7 @@ type GroupedFinding struct {
 	Title       string
 	Severity    Severity
 	OWASP       string
+	Confidence  string
 	Description string
 	Evidence    string
 	Remediation string
