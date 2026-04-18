@@ -4,27 +4,31 @@ GoSentinel is a concurrent web vulnerability scanner designed for reconnaissance
 
 ## Core Functionality
 
-- **BFS Crawler**: A thread-safe spider that recursively discovers links and forms. It is restricted to the target host and its subdomains by default.
-- **Concurrent Engine**: Orchestrates multiple vulnerability modules in parallel using Go's concurrency primitives.
-- **Finding Aggregation**: Groups identical findings (e.g., missing headers on multiple pages) into single reports to reduce output noise.
-- **Aggregated HTML Reports**: Generates a scannable, dark-mode dashboard with expandable technical evidence.
+- **Concurrent BFS Crawler**: A thread-safe spider that recursively discovers links and forms while enforcing strict host-scoped protection.
+- **Resilient Scanner Engine**: Orchestrates multiple vulnerability modules in parallel. The engine features individual module error isolation, ensuring that a failure in one module does not terminate the overall scan.
+- **Finding Aggregation & Deduplication**: Automatically groups identical findings across multiple endpoints into structured reports to reduce output noise.
+- **Multi-format Reporting**: Generates scannable, dark-mode HTML dashboards and structured JSON output for CI/CD integration.
 
 ## Security Modules
 
-| Module | Detection Type | Details |
-| :--- | :--- | :--- |
-| **Headers** | Passive | Audits CSP, HSTS, X-Frame-Options, and other security headers. |
-| **Sensitive** | Passive | Scans for AWS keys, private keys, tokens, and hardcoded secrets. |
-| **Leakage** | Passive | Identifies stack traces, debug error messages, and directory listings. |
+| Module        | Detection Type | Details                                                                 |
+| :------------ | :------------- | :---------------------------------------------------------------------- |
+| **Headers**   | Passive        | Audits CSP, HSTS, X-Frame-Options, and other security headers.          |
+| **Sensitive** | Passive        | Scans for AWS keys, private keys, tokens, and hardcoded secrets.        |
+| **CSRF**      | Passive        | Detects missing CSRF tokens in state-changing HTML forms.               |
+| **XSS**       | Active         | Injects payloads into URL parameters and forms to detect reflected XSS. |
+| **Leakage**   | Passive        | Identifies stack traces, debug error messages, and directory listings.  |
 
 ## Quick Start
 
 ### Build from source
+
 ```bash
 go build -o gosentinel .
 ```
 
-### Basic usage
+### Basic Usage
+
 ```bash
 # Scan a target with default depth (2)
 ./gosentinel scan --url https://example.com
@@ -34,31 +38,37 @@ go build -o gosentinel .
 ```
 
 ### Flags
+
 - `--url`: The target URL to scan (required).
 - `--depth`: Maximum crawl depth (default 2).
 - `--concurrency`: Number of concurrent workers (default 10).
-- `--output`: Path to save the HTML report.
-- `-v, --verbose`: Show detailed URLs and evidence in terminal output.
+- `--output`: Path to save the HTML or JSON report.
+- `-v, --verbose`: Show detailed URLs and technical evidence in terminal output.
 
 ## Developer Guide
 
 ### Project Architecture
-- `cmd/`: CLI interface and command definitions.
-- `internal/scanner/`: Core orchestration logic and finding models.
-- `internal/crawler/`: BFS spider and reconnaissance logic.
-- `internal/report/`: HTML template and reporting logic.
+
+- `cmd/`: CLI interface and command definitions (Cobra).
+- `internal/scanner/`: Core orchestration logic, finding models, and module registry.
+- `internal/crawler/`: High-performance BFS spider and reconnaissance logic.
+- `internal/report/`: HTML and JSON reporting logic.
+- `internal/httpclient/`: Shared intelligent networking layer with redirect tracking.
 
 ### Web Dashboard (Experimental)
+
 A React + Vite based dashboard for visualizing large scan datasets is located in the `web/` directory.
 
 To start the development server:
+
 ```bash
 cd web
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
 ### How to Build a Module
+
 1. Create a new file in `internal/scanner/modules/`.
 2. Implement the `Module` interface:
    ```go
@@ -67,10 +77,8 @@ yarn dev
        Run(ctx context.Context, endpoints []crawler.Endpoint) ([]scanner.Finding, error)
    }
    ```
-3. Register your module in `cmd/scan.go` inside the `runScan` function:
-   ```go
-   engine.RegisterModule(&modules.YourNewModule{})
-   ```
+3. Register your module in `cmd/scan.go` inside the `runScan` function.
 
 ## License
+
 [MIT](LICENSE)
