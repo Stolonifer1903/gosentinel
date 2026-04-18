@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/Stolonifer1903/gosentinel/internal/crawler"
 	"github.com/Stolonifer1903/gosentinel/internal/httpclient"
 	"github.com/Stolonifer1903/gosentinel/internal/report"
 	"github.com/Stolonifer1903/gosentinel/internal/scanner"
 	"github.com/Stolonifer1903/gosentinel/internal/scanner/modules"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -28,8 +28,6 @@ var (
 	hiWhite = color.New(color.FgHiWhite, color.Bold).SprintfFunc()
 	dim     = color.New(color.Faint).SprintfFunc()
 )
-
-
 
 // ── scan command ──────────────────────────────────────────────────────────────
 
@@ -103,10 +101,12 @@ func runScan(cmd *cobra.Command, _ []string) error {
 
 	// ── 4. Run scanner engine ─────────────────────────────────────────────────────
 	fmt.Printf("%s Running vulnerability checks…\n", cyan("[~]"))
+	sharedClient := httpclient.DefaultClient
 	activeModules := []scanner.Module{
 		&modules.HeadersModule{},
 		&modules.SensitiveModule{},
 		&modules.CSRFModule{},
+		&modules.XSSModule{Client: sharedClient},
 	}
 	engine := scanner.NewEngine(activeModules)
 	scanResult, err := engine.Run(cmd.Context(), endpoints)
@@ -199,8 +199,6 @@ func printHeaders(r *httpclient.HeaderResult, verbose bool) {
 	}
 	fmt.Printf("%s\n\n", hiWhite("  └─"))
 }
-
-
 
 // writeReport dispatches to the right renderer based on the file extension.
 // It also ensures reports are saved in an organized directory structure.
