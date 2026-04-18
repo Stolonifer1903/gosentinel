@@ -57,14 +57,14 @@ func (s *Spider) Crawl() ([]Endpoint, error) {
 		for _, link := range currentLevel {
 			if s.shouldVisit(link) {
 				s.markVisited(link)
-				
+
 				wg.Add(1)
 				s.Sem <- struct{}{} // Acquire semaphore
 
 				go func(target string) {
 					defer wg.Done()
 					defer func() { <-s.Sem }() // Release semaphore
-					
+
 					discoveredLinks, err := s.processURL(target)
 					if err == nil && len(discoveredLinks) > 0 {
 						nextLevelMu.Lock()
@@ -74,10 +74,10 @@ func (s *Spider) Crawl() ([]Endpoint, error) {
 				}(link)
 			}
 		}
-		
+
 		// Wait for all goroutines at this depth to finish
 		wg.Wait()
-		
+
 		currentLevel = nextLevel
 		if len(currentLevel) == 0 {
 			break
@@ -118,7 +118,7 @@ func (s *Spider) addEndpoint(e Endpoint) {
 	}
 	s.endpointsMu.Lock()
 	defer s.endpointsMu.Unlock()
-	
+
 	// Avoid duplicates in results
 	for _, existing := range s.Endpoints {
 		if existing.URL == e.URL && existing.Method == e.Method && strings.Join(existing.Params, ",") == strings.Join(e.Params, ",") {
@@ -129,7 +129,7 @@ func (s *Spider) addEndpoint(e Endpoint) {
 }
 
 func (s *Spider) processURL(target string) ([]string, error) {
-	resp, err := httpclient.DefaultClient.Get(target)
+	resp, err := httpclient.DefaultClient.HTTPClient().Get(target)
 	if err != nil {
 		return nil, err
 	}
