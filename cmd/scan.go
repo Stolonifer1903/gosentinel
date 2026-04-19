@@ -117,6 +117,20 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		fmt.Printf(" %s %d unique finding(s) detected (%d instances)\n\n",
 			green("[✔]"), len(groupedFindings), len(scanResult.Findings))
 
+		var hasErrors bool
+		for _, mr := range scanResult.ModuleResults {
+			if mr.Error != nil {
+				if !hasErrors {
+					fmt.Printf("%s\n", hiWhite("  ┌─ Module Errors "))
+					hasErrors = true
+				}
+				fmt.Printf("  %s %s: %s\n", red("│"), cyan(mr.ModuleName), mr.Error.Error())
+			}
+		}
+		if hasErrors {
+			fmt.Printf("%s\n\n", hiWhite("  └─"))
+		}
+
 		if len(groupedFindings) > 0 {
 			printFindings(groupedFindings, verbose)
 		}
@@ -124,7 +138,15 @@ func runScan(cmd *cobra.Command, _ []string) error {
 
 	// ── 5. Write report file if --output was given ────────────────────────────
 	if output != "" {
-		if err := writeReport(output, parsedURL.String(), httpResult, scanResult.Group(), endpoints); err != nil {
+		modErrors := make(map[string]string)
+		if scanResult != nil {
+			for _, mr := range scanResult.ModuleResults {
+				if mr.Error != nil {
+					modErrors[mr.ModuleName] = mr.Error.Error()
+				}
+			}
+		}
+		if err := writeReport(output, parsedURL.String(), httpResult, scanResult.Group(), endpoints, modErrors); err != nil {
 			return fmt.Errorf("writing report: %w", err)
 		}
 	}
@@ -202,16 +224,17 @@ func printHeaders(r *httpclient.HeaderResult, verbose bool) {
 
 // writeReport dispatches to the right renderer based on the file extension.
 // It also ensures reports are saved in an organized directory structure.
-func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []scanner.GroupedFinding, endpoints []crawler.Endpoint) error {
+func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []scanner.GroupedFinding, endpoints []crawler.Endpoint, modErrors map[string]string) error {
 	result := &report.ScanResult{
-		Target:     target,
-		ScannedAt:  time.Now(),
-		Duration:   r.Duration,
-		StatusCode: r.StatusCode,
-		Status:     r.Status,
-		AllHeaders: r.Headers,
-		Findings:   findings,
-		Endpoints:  endpoints,
+		Target:       target,
+		ScannedAt:    time.Now(),
+		Duration:     r.Duration,
+		StatusCode:   r.StatusCode,
+		Status:       r.Status,
+		AllHeaders:   r.Headers,
+		Findings:     findings,
+		Endpoints:    endpoints,
+		ModuleErrors: modErrors,
 	}
 
 	ext := strings.ToLower(filepath.Ext(outPath))

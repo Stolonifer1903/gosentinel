@@ -27,6 +27,7 @@ type ScanResult struct {
 	Findings       []scanner.GroupedFinding
 	Endpoints      []crawler.Endpoint
 	SeverityCounts map[string]int
+	ModuleErrors   map[string]string
 }
 
 // WriteHTML renders the scan result as a self-contained HTML file to outPath.
@@ -640,6 +641,20 @@ const htmlTemplate = `<!DOCTYPE html>
       </div>
     </div>
   </div>
+
+  {{if .ModuleErrors}}
+  <div class="section-title" style="color: var(--critical);">Module Execution Errors</div>
+  <div class="summary-grid">
+    {{range $mod, $err := .ModuleErrors}}
+    <div class="summary-card" style="border-color: rgba(239, 68, 68, 0.3);">
+      <div class="label" style="color: var(--critical);">{{$mod}} Module Failed</div>
+      <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem; word-break: break-all;">
+        {{$err}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
 
   <footer>
     GoSentinel Security &bull; Engine v1.1.0 &bull; &copy; {{.ScannedAt.Format "2006"}}

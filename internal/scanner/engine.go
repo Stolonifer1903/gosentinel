@@ -22,18 +22,27 @@ func NewEngine(modules []Module) *Engine {
 	return &Engine{modules: modules}
 }
 
+// ModuleResult encapsulates findings and any error returned by a specific module.
+type ModuleResult struct {
+	ModuleName string
+	Findings   []Finding
+	Error      error
+}
+
 // Result combines all findings from all modules after a scan.
 type Result struct {
-	Findings []Finding
+	Findings      []Finding
+	ModuleResults []ModuleResult
 }
 
 // Run executes all registered modules concurrently against the provided
 // endpoints, then merges and sorts the findings.
 func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result, error) {
 	var (
-		mu          sync.Mutex
-		wg          sync.WaitGroup
-		allFindings []Finding
+		mu            sync.Mutex
+		wg            sync.WaitGroup
+		allFindings   []Finding
+		moduleResults []ModuleResult
 	)
 
 	for _, mod := range e.modules {
@@ -42,13 +51,16 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 			defer wg.Done()
 
 			findings, err := m.Run(ctx, endpoints)
-			if err != nil {
-				// Non-fatal: a module failure doesn't stop other modules.
-				return
-			}
 
 			mu.Lock()
-			allFindings = append(allFindings, findings...)
+			if findings != nil {
+				allFindings = append(allFindings, findings...)
+			}
+			moduleResults = append(moduleResults, ModuleResult{
+				ModuleName: m.Name(),
+				Findings:   findings,
+				Error:      err,
+			})
 			mu.Unlock()
 		}(mod)
 	}
@@ -60,7 +72,10 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 		return allFindings[i].Rank() > allFindings[j].Rank()
 	})
 
-	return &Result{Findings: allFindings}, nil
+	return &Result{
+		Findings:      allFindings,
+		ModuleResults: moduleResults,
+	}, nil
 }
 
 // Group aggregates identical findings (same Title and Severity) into GroupedFinding structs.
