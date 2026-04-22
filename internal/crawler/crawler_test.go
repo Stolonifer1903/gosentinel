@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -40,7 +41,7 @@ func TestSpider_DepthControl(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			s, _ := NewSpider(server.URL, tc.maxDepth, 10)
-			endpoints, err := s.Crawl()
+			endpoints, err := s.Crawl(context.Background())
 			if err != nil {
 				t.Fatalf("Crawl failed: %v", err)
 			}
@@ -84,7 +85,7 @@ func TestSpider_ScopeEnforcement(t *testing.T) {
 	defer server.Close()
 
 	s, _ := NewSpider(server.URL, 1, 10)
-	endpoints, err := s.Crawl()
+	endpoints, err := s.Crawl(context.Background())
 	if err != nil {
 		t.Fatalf("Crawl failed: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestSpider_FormExtraction(t *testing.T) {
 	defer server.Close()
 
 	s, _ := NewSpider(server.URL, 0, 10)
-	endpoints, err := s.Crawl()
+	endpoints, err := s.Crawl(context.Background())
 	if err != nil {
 		t.Fatalf("Crawl failed: %v", err)
 	}
@@ -202,7 +203,7 @@ func TestSpider_LinkExtraction(t *testing.T) {
 	defer server.Close()
 
 	s, _ := NewSpider(server.URL, 0, 10)
-	endpoints, err := s.Crawl()
+	endpoints, err := s.Crawl(context.Background())
 	if err != nil {
 		t.Fatalf("Crawl failed: %v", err)
 	}

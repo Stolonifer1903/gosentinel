@@ -1,8 +1,9 @@
 package crawler
 
 import (
+	"context"
 	"fmt"
-	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -46,8 +47,14 @@ func NewSpider(targetURL string, maxDepth int, concurrency int) (*Spider, error)
 }
 
 // Crawl starts the BFS crawling process.
-func (s *Spider) Crawl() ([]Endpoint, error) {
+func (s *Spider) Crawl(ctx context.Context) ([]Endpoint, error) {
 	currentLevel := []string{s.BaseURL.String()}
+
+	s.addEndpoint(Endpoint{
+		URL:    s.BaseURL.String(),
+		Method: "GET",
+		Source: "Seed",
+	})
 
 	for depth := 0; depth <= s.MaxDepth; depth++ {
 		var nextLevel []string
@@ -55,9 +62,7 @@ func (s *Spider) Crawl() ([]Endpoint, error) {
 		var wg sync.WaitGroup
 
 		for _, link := range currentLevel {
-			if s.shouldVisit(link) {
-				s.markVisited(link)
-
+			if s.shouldVisitAndMark(link) {
 				wg.Add(1)
 				s.Sem <- struct{}{} // Acquire semaphore
 
@@ -65,7 +70,7 @@ func (s *Spider) Crawl() ([]Endpoint, error) {
 					defer wg.Done()
 					defer func() { <-s.Sem }() // Release semaphore
 
-					discoveredLinks, err := s.processURL(target)
+					discoveredLinks, err := s.processURL(ctx, target)
 					if err == nil && len(discoveredLinks) > 0 {
 						nextLevelMu.Lock()
 						nextLevel = append(nextLevel, discoveredLinks...)
@@ -96,20 +101,18 @@ func (s *Spider) isInScope(link string) bool {
 	return parsed.Host == s.BaseURL.Host || strings.HasSuffix(parsed.Host, "."+s.BaseURL.Host)
 }
 
-func (s *Spider) shouldVisit(link string) bool {
+func (s *Spider) shouldVisitAndMark(link string) bool {
 	if !s.isInScope(link) {
 		return false
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return !s.Visited[link]
-}
-
-func (s *Spider) markVisited(link string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	if s.Visited[link] {
+		return false
+	}
 	s.Visited[link] = true
+	return true
 }
 
 func (s *Spider) addEndpoint(e Endpoint) {
@@ -128,22 +131,22 @@ func (s *Spider) addEndpoint(e Endpoint) {
 	s.Endpoints = append(s.Endpoints, e)
 }
 
-func (s *Spider) processURL(target string) ([]string, error) {
-	resp, err := httpclient.DefaultClient.HTTPClient().Get(target)
+func (s *Spider) processURL(ctx context.Context, target string) ([]string, error) {
+	req := httpclient.SubmitRequest{
+		Method: http.MethodGet,
+		URL:    target,
+		Ctx:    ctx,
+	}
+	resp, err := httpclient.DefaultClient.Submit(req)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		// Drain and close the body to allow TCP connection reuse
-		_, _ = io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
-	}()
 
-	if !strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
+	if !strings.Contains(resp.ContentType, "text/html") {
 		return nil, nil
 	}
 
-	doc, err := html.Parse(resp.Body)
+	doc, err := html.Parse(strings.NewReader(resp.Body))
 	if err != nil {
 		return nil, err
 	}
@@ -156,22 +159,19 @@ func (s *Spider) processURL(target string) ([]string, error) {
 			case "a":
 				for _, a := range n.Attr {
 					if a.Key == "href" {
-						fullURL := s.resolveURL(target, a.Val)
-						if fullURL != "" {
+						fullURL := s.resolveURL(resp.FinalURL, a.Val)
+						if fullURL != "" && s.isInScope(fullURL) {
 							discovered = append(discovered, fullURL)
-							// Only add to endpoints if it's in scope
-							if s.isInScope(fullURL) {
-								s.addEndpoint(Endpoint{
-									URL:    fullURL,
-									Method: "GET",
-									Source: "Link",
-								})
-							}
+							s.addEndpoint(Endpoint{
+								URL:    fullURL,
+								Method: "GET",
+								Source: "Link",
+							})
 						}
 					}
 				}
 			case "form":
-				form := s.parseForm(target, n)
+				form := s.parseForm(resp.FinalURL, n)
 				s.addEndpoint(form)
 			}
 		}
@@ -179,16 +179,6 @@ func (s *Spider) processURL(target string) ([]string, error) {
 			f(c)
 		}
 	}
-	// Initial crawl of the page
-	// We also count the page itself as an endpoint if it's the root
-	if target == s.BaseURL.String() {
-		s.addEndpoint(Endpoint{
-			URL:    target,
-			Method: "GET",
-			Source: "Seed",
-		})
-	}
-
 	f(doc)
 	return discovered, nil
 }
@@ -240,8 +230,10 @@ func (s *Spider) parseForm(baseURL string, n *html.Node) Endpoint {
 	extractInputs(n)
 
 	resolvedAction := s.resolveURL(baseURL, action)
-	if resolvedAction == "" {
+	if action == "" {
 		resolvedAction = baseURL
+	} else if resolvedAction == "" {
+		return Endpoint{}
 	}
 
 	// Only add forms that are in scope

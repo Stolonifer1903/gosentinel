@@ -100,7 +100,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("initializing spider: %w", err)
 	}
 
-	endpoints, err := spider.Crawl()
+	endpoints, err := spider.Crawl(cmd.Context())
 	if err != nil {
 		fmt.Printf(" %s Spidering failed: %v\n\n", red("[!]"), err)
 	} else {
