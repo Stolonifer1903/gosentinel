@@ -31,6 +31,7 @@ const (
 // XSS-related check IDs
 const (
 	XSSReflected CheckID = "XSS_REFLECTED"
+	XSSStored   CheckID = "XSS_STORED"
 )
 
 // SQL Injection-related check IDs

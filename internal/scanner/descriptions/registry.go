@@ -112,6 +112,12 @@ var DescriptionRegistry = map[CheckID]VulnerabilityDescription{
 		Why:      "Reflected XSS allows attackers to inject and execute arbitrary JavaScript in the context of your application, running with the victim's privileges and access.",
 		Impact:   "Attackers can steal session cookies, authentication tokens, user data, or perform actions on behalf of users. Malicious scripts can redirect users to phishing sites or deliver malware.",
 	},
+	XSSStored: {
+		Category: "A03:2021 - Injection",
+		What:     "A stored (persistent) XSS canary was injected into a form parameter and later found rendered unescaped in a page response.",
+		Why:      "Stored XSS executes in the browser of every user who visits the affected page, making it more dangerous than reflected XSS because it requires no user interaction beyond visiting a legitimate URL.",
+		Impact:   "Attackers can persistently steal session tokens, redirect users to phishing sites, or deliver malware to all visitors of the affected page.",
+	},
 
 	// ============================================================================
 	// SQL INJECTION (A03:2021 - Injection)

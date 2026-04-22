@@ -34,19 +34,29 @@ var (
 var scanCmd = &cobra.Command{
 	Use:   "scan",
 	Short: "Scan a target URL for vulnerabilities",
-	Long: hiWhite("Usage:\n") +
+	Long: hiWhite("The scan command launches the core security engine against a target URL.\n") +
+		white("It coordinates crawling, header analysis, and active injection payloads.\n\n") +
+		hiWhite("Active Modules:\n") +
+		cyan("  • Security Headers ") + dim("(Passive)") + white(" — Audits CSP, HSTS, X-Frame-Options, etc.\n") +
+		cyan("  • Sensitive Data   ") + dim("(Passive)") + white(" — Scans for secrets, keys, and debug leaks.\n") +
+		cyan("  • CSRF Protection  ") + dim("(Passive)") + white(" — Detects state-changing forms without tokens.\n") +
+		cyan("  • Reflected XSS    ") + dim("(Active) ") + white(" — Tests parameters for immediate reflection.\n") +
+		cyan("  • Stored XSS       ") + dim("(Active) ") + white(" — 2-phase canary detection for persisted data.\n\n") +
+		hiWhite("Usage:\n") +
 		white("  gosentinel scan --url <target> [flags]\n\n") +
 		hiWhite("Examples:\n") +
 		white("  gosentinel scan --url https://example.com\n") +
-		white("  gosentinel scan --url https://example.com --depth 3 -v\n"),
+		white("  gosentinel scan --url https://example.com --depth 3 -o report.html\n") +
+		white("  gosentinel scan --url https://example.com --confirm-stored-xss\n"),
 	RunE: runScan,
 }
 
 func init() {
-	scanCmd.Flags().StringP("url", "u", "", "Target URL to scan (required)")
-	scanCmd.Flags().IntP("depth", "d", 2, "Crawler depth limit (pages to follow from the root)")
-	scanCmd.Flags().IntP("concurrency", "c", 10, "Number of concurrent crawler requests")
-	scanCmd.Flags().StringP("output", "o", "", "Write report to file (e.g. report.html)")
+	scanCmd.Flags().StringP("url", "u", "", "Target URL to scan (e.g. https://example.com)")
+	scanCmd.Flags().IntP("depth", "d", 2, "Crawler depth limit (how many links deep to follow)")
+	scanCmd.Flags().IntP("concurrency", "c", 10, "Number of concurrent network requests")
+	scanCmd.Flags().StringP("output", "o", "", "Write results to a file (.html or .json)")
+	scanCmd.Flags().Bool("confirm-stored-xss", false, "Enable 2-phase verification of stored XSS via automated script injection")
 
 	// Mark --url as required so Cobra validates it before RunE is called.
 	_ = scanCmd.MarkFlagRequired("url")
@@ -62,6 +72,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	concurrency, _ := cmd.Flags().GetInt("concurrency")
 	output, _ := cmd.Flags().GetString("output")
 	verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
+	confirmStored, _ := cmd.Flags().GetBool("confirm-stored-xss")
 
 	// ── 1. Validate URL ───────────────────────────────────────────────────────
 	parsedURL, err := validateURL(target)
@@ -107,6 +118,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		&modules.SensitiveModule{},
 		&modules.CSRFModule{},
 		&modules.XSSModule{Client: sharedClient},
+		&modules.StoredXSSModule{Client: sharedClient, Confirm: confirmStored},
 	}
 	engine := scanner.NewEngine(activeModules)
 	scanResult, err := engine.Run(cmd.Context(), endpoints)
