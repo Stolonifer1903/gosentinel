@@ -15,6 +15,7 @@ export interface GroupedFinding {
   Severity: 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
   OWASP: string;
   Confidence: string;
+  Evidence?: string;
   Remediation: string;
   Endpoints: AffectedEndpoint[];
 }
@@ -22,7 +23,8 @@ export interface GroupedFinding {
 export interface Endpoint {
   URL: string;
   Method: string;
-  Params: string[];
+  Params: string[] | null;
+  Source?: string;
 }
 
 export interface ScanResult {
@@ -35,4 +37,6 @@ export interface ScanResult {
   Findings: GroupedFinding[];
   Endpoints: Endpoint[];
   SeverityCounts: Record<string, number>;
+  ModuleErrors?: Record<string, string>;
 }
+

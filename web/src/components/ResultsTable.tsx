@@ -1,10 +1,7 @@
 import {
-  AlertTriangle,
   ExternalLink,
   Clock,
   Zap,
-  ShieldCheck,
-  ShieldAlert,
 } from "lucide-react";
 
 interface ScanResult {
@@ -163,14 +160,11 @@ function HealthIndicator({
 }) {
   const percentage = (current / total) * 100;
   let colorClass = "bg-brand-cyan";
-  let Icon = ShieldCheck;
 
   if (percentage < 50) {
     colorClass = "bg-severity-critical";
-    Icon = ShieldAlert;
   } else if (percentage < 100) {
     colorClass = "bg-severity-medium";
-    Icon = AlertTriangle;
   }
 
   return (

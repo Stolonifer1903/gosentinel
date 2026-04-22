@@ -11,15 +11,20 @@ import {
   Upload,
   X,
   Plus,
+  Info,
+  Globe,
+  Terminal,
 } from "lucide-react";
-import ResultsTable from "./components/ResultsTable";
 import VulnerabilityTable from "./components/VulnerabilityTable";
 import FindingInspector from "./components/FindingInspector";
+import AttackSurfaceTable from "./components/AttackSurfaceTable";
+import ScanOverview from "./components/ScanOverview";
 import type { ScanResult, GroupedFinding } from "./types/scan";
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeReport, setActiveReport] = useState<ScanResult | null>(null);
+  const [activeTab, setActiveTab] = useState<"findings" | "surface" | "overview">("findings");
   const [selectedFinding, setSelectedFinding] = useState<GroupedFinding | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,6 +50,7 @@ function App() {
   const resetReport = () => {
     setActiveReport(null);
     setSelectedFinding(null);
+    setActiveTab("findings");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -127,15 +133,15 @@ function App() {
         {/* Header - Transparent & Integrated */}
         <header className="h-14 border-b border-brand-border px-6 flex items-center justify-between">
           <div className="flex items-center gap-4 flex-1 max-w-lg">
-            <div className="relative w-full">
+            <div className="relative w-full group">
               <Search
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-muted"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted group-focus-within:text-brand-cyan transition-colors"
                 size={14}
               />
               <input
                 type="text"
                 placeholder="Search resources..."
-                className="w-full bg-transparent border-none text-xs focus:ring-0 placeholder:text-brand-muted/50"
+                className="w-full bg-brand-surface/50 border border-brand-border rounded-md py-1.5 pl-9 pr-4 text-xs focus:ring-1 focus:ring-brand-cyan/30 focus:border-brand-cyan transition-all placeholder:text-brand-muted/70 outline-none"
               />
             </div>
           </div>
@@ -179,9 +185,9 @@ function App() {
           {/* Stats Cards - Precise & Monospaced */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatCard
-              label="Total Scans"
-              value={activeReport ? "1" : "1,284"}
-              trend={activeReport ? "" : "+12%"}
+              label="Duration"
+              value={activeReport ? `${(activeReport.Duration / 1000000).toFixed(0)}ms` : "1.2s"}
+              trend={activeReport ? "Latency" : "+12%"}
             />
             <StatCard
               label="Vulnerabilities"
@@ -221,27 +227,72 @@ function App() {
           {/* Main Area: High Density Content */}
           <div className="bg-brand-bg border border-brand-border rounded overflow-hidden">
             <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between bg-brand-surface/30">
-              <div className="flex items-center gap-2">
-                <Activity className="text-brand-muted" size={16} />
-                <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted">
-                  {activeReport ? "Finding Log" : "Event Stream"}
-                </h3>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2 pr-4 border-r border-brand-border/50">
+                  <Activity className="text-brand-muted" size={16} />
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted">
+                    {activeReport ? "Scan Data" : "Event Stream"}
+                  </h3>
+                </div>
+                
+                {activeReport && (
+                  <div className="flex gap-4">
+                    <TabButton 
+                      label="Vulnerabilities" 
+                      icon={<ShieldCheck size={14} />} 
+                      active={activeTab === 'findings'} 
+                      onClick={() => setActiveTab('findings')} 
+                      count={activeReport.Findings?.length}
+                    />
+                    <TabButton 
+                      label="Attack Surface" 
+                      icon={<Globe size={14} />} 
+                      active={activeTab === 'surface'} 
+                      onClick={() => setActiveTab('surface')} 
+                      count={activeReport.Endpoints?.length}
+                    />
+                    <TabButton 
+                      label="Scan Overview" 
+                      icon={<Info size={14} />} 
+                      active={activeTab === 'overview'} 
+                      onClick={() => setActiveTab('overview')} 
+                      hasAlert={activeReport.ModuleErrors && Object.keys(activeReport.ModuleErrors).length > 0}
+                    />
+                  </div>
+                )}
               </div>
+              
               {!activeReport && (
                 <button className="text-brand-cyan text-[11px] font-bold uppercase hover:underline">
                   View History
                 </button>
               )}
             </div>
-            <div className="overflow-x-auto">
+            
+            <div className="overflow-x-auto min-h-[400px]">
               {activeReport ? (
-                <VulnerabilityTable 
-                  findings={activeReport.Findings} 
-                  onInspect={setSelectedFinding}
-                  selectedId={selectedFinding ? selectedFinding.Title + selectedFinding.OWASP : undefined}
-                />
+                <>
+                  {activeTab === 'findings' && (
+                    <VulnerabilityTable 
+                      findings={activeReport.Findings} 
+                      onInspect={setSelectedFinding}
+                      selectedId={selectedFinding ? selectedFinding.Title + selectedFinding.OWASP : undefined}
+                    />
+                  )}
+                  {activeTab === 'surface' && (
+                    <AttackSurfaceTable endpoints={activeReport.Endpoints} />
+                  )}
+                  {activeTab === 'overview' && (
+                    <ScanOverview report={activeReport} />
+                  )}
+                </>
               ) : (
-                <ResultsTable />
+                <div className="p-16 text-center text-brand-muted">
+                  <Terminal size={40} className="mx-auto mb-4 opacity-10" />
+                  <p className="text-xs uppercase tracking-widest font-bold">
+                    Awaiting System Input: Import a report to begin analysis
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -323,6 +374,39 @@ function StatCard({ label, value, trend, isWarning }: StatCardProps) {
         )}
       </div>
     </div>
+  );
+}
+
+interface TabButtonProps {
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  count?: number;
+  hasAlert?: boolean;
+}
+
+function TabButton({ label, icon, active, onClick, count, hasAlert }: TabButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-1 py-1 border-b-2 transition-all duration-200 relative ${
+        active 
+          ? 'border-brand-cyan text-brand-text' 
+          : 'border-transparent text-brand-muted hover:text-brand-text'
+      }`}
+    >
+      <span className={active ? 'text-brand-cyan' : ''}>{icon}</span>
+      <span className="text-[11px] font-bold uppercase tracking-tight">{label}</span>
+      {count !== undefined && (
+        <span className={`text-[9px] font-mono px-1 rounded-sm ${active ? 'bg-brand-cyan text-brand-bg' : 'bg-brand-surface text-brand-muted'}`}>
+          {count}
+        </span>
+      )}
+      {hasAlert && (
+        <span className="absolute -top-1 -right-1 w-2 h-2 bg-severity-high rounded-full border border-brand-bg animate-pulse" />
+      )}
+    </button>
   );
 }
 

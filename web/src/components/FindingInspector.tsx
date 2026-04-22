@@ -68,7 +68,20 @@ function FindingInspector({ finding, onClose }: Props) {
               </p>
             </section>
 
+            {/* Evidence (Global) */}
+            {finding.Evidence && (
+              <section className="space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2">
+                  <ShieldAlert size={14} /> Global Evidence
+                </h3>
+                <div className="p-4 bg-brand-surface/50 border border-brand-border rounded-lg font-mono text-[11px] text-brand-cyan leading-relaxed">
+                  {finding.Evidence}
+                </div>
+              </section>
+            )}
+
             {/* Remediation */}
+
             <section className="space-y-4">
               <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2">
                 <Award size={14} /> Remediation Strategy
