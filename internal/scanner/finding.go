@@ -16,6 +16,16 @@ const (
 	Info     Severity = "Info"
 )
 
+type Confidence string
+
+const (
+	ConfirmedConfidence     Confidence = "Confirmed"
+	HighConfidence          Confidence = "High"
+	MediumConfidence        Confidence = "Medium"
+	LowConfidence           Confidence = "Low"
+	InformationalConfidence Confidence = "Informational"
+)
+
 // severityRank maps severities to a numeric rank for sorting.
 var severityRank = map[Severity]int{
 	Critical: 5,
@@ -23,6 +33,15 @@ var severityRank = map[Severity]int{
 	Medium:   3,
 	Low:      2,
 	Info:     1,
+}
+
+// confidenceRank maps confidence levels to a numeric rank for sorting.
+var confidenceRank = map[Confidence]int{
+	ConfirmedConfidence:     4,
+	HighConfidence:          3,
+	MediumConfidence:        2,
+	LowConfidence:           1,
+	InformationalConfidence: 0,
 }
 
 // Finding represents a single discovered vulnerability or security issue.
@@ -34,7 +53,7 @@ type Finding struct {
 	// OWASP is the relevant OWASP Top 10 category (e.g. "A05:2021").
 	OWASP string
 	// Confidence describes how strongly the scanner validated the issue.
-	Confidence string
+	Confidence Confidence
 	// Description is a detailed explanation of the vulnerability.
 	Description string
 	// URL is the affected endpoint.
@@ -68,7 +87,7 @@ type GroupedFinding struct {
 	Title       string
 	Severity    Severity
 	OWASP       string
-	Confidence  string
+	Confidence  Confidence
 	Description string
 	Evidence    string
 	Remediation string

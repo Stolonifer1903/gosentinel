@@ -85,7 +85,7 @@ func (r *Result) Group() []GroupedFinding {
 		title       string
 		severity    Severity
 		owasp       string
-		confidence  string
+		confidence  Confidence
 		description string
 		evidence    string
 		remediation string
