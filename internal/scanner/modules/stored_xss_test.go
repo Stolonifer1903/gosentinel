@@ -158,8 +158,8 @@ func TestStoredXSSModule(t *testing.T) {
 		if f.Severity != scanner.High {
 			t.Errorf("Severity = %q, want High", f.Severity)
 		}
-		if f.Confidence != "Confirmed" {
-			t.Errorf("Confidence = %q, want Confirmed", f.Confidence)
+		if f.Confidence != scanner.ConfirmedConfidence {
+			t.Errorf("Confidence = %q, want %q", f.Confidence, scanner.ConfirmedConfidence)
 		}
 		if f.OWASP != "A03:2021 - Injection" {
 			t.Errorf("OWASP = %q, want A03:2021 - Injection", f.OWASP)
@@ -308,8 +308,8 @@ func TestBuildStoredXSSFinding(t *testing.T) {
 	if f.Severity != scanner.High {
 		t.Errorf("Severity = %q, want High", f.Severity)
 	}
-	if f.Confidence != "Confirmed" {
-		t.Errorf("Confidence = %q, want Confirmed", f.Confidence)
+	if f.Confidence != scanner.ConfirmedConfidence {
+		t.Errorf("Confidence = %q, want %q", f.Confidence, scanner.ConfirmedConfidence)
 	}
 	if f.OWASP != "A03:2021 - Injection" {
 		t.Errorf("OWASP = %q, want A03:2021 - Injection", f.OWASP)
@@ -324,7 +324,7 @@ func TestBuildStoredXSSFinding(t *testing.T) {
 		t.Errorf("Parameter = %q", f.Parameter)
 	}
 
-	wantDetail := "Write: POST http://example.com/post (comment) → Read: http://example.com/view"
+	wantDetail := "Write: POST http://example.com/post (comment) → Read: http://example.com/view | Proof: Canary gs-aabbccdd on http://example.com/view"
 	if f.EndpointDetail != wantDetail {
 		t.Errorf("EndpointDetail = %q, want %q", f.EndpointDetail, wantDetail)
 	}

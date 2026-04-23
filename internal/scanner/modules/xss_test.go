@@ -26,7 +26,7 @@ func TestXSSModule(t *testing.T) {
 		endpoints      []crawler.Endpoint
 		wantFindings   int
 		wantSeverity   scanner.Severity
-		wantConfidence string
+		wantConfidence scanner.Confidence
 		wantParameter  string
 		wantGrouped    int
 		wantEndpoints  int
@@ -39,7 +39,7 @@ func TestXSSModule(t *testing.T) {
 			},
 			wantFindings:   1,
 			wantSeverity:   scanner.High,
-			wantConfidence: "Confirmed",
+			wantConfidence: scanner.ConfirmedConfidence,
 			wantParameter:  "q",
 			wantGrouped:    1,
 			wantEndpoints:  1,
@@ -52,7 +52,7 @@ func TestXSSModule(t *testing.T) {
 			},
 			wantFindings:   1,
 			wantSeverity:   scanner.High,
-			wantConfidence: "Confirmed",
+			wantConfidence: scanner.ConfirmedConfidence,
 			wantParameter:  "input",
 			wantGrouped:    1,
 			wantEndpoints:  1,
@@ -74,7 +74,7 @@ func TestXSSModule(t *testing.T) {
 			},
 			wantFindings:   1,
 			wantSeverity:   scanner.Medium,
-			wantConfidence: "Potential",
+			wantConfidence: scanner.MediumConfidence,
 			wantParameter:  "q",
 			wantGrouped:    1,
 			wantEndpoints:  1,
@@ -87,7 +87,7 @@ func TestXSSModule(t *testing.T) {
 			},
 			wantFindings:   1,
 			wantSeverity:   scanner.High,
-			wantConfidence: "Confirmed",
+			wantConfidence: scanner.ConfirmedConfidence,
 			wantParameter:  "unsafe",
 			wantGrouped:    1,
 			wantEndpoints:  1,
@@ -116,7 +116,7 @@ func TestXSSModule(t *testing.T) {
 			},
 			wantFindings:   2,
 			wantSeverity:   scanner.High,
-			wantConfidence: "Confirmed",
+			wantConfidence: scanner.ConfirmedConfidence,
 			wantParameter:  "q",
 			wantGrouped:    1,
 			wantEndpoints:  2,
@@ -132,7 +132,7 @@ func TestXSSModule(t *testing.T) {
 			},
 			wantFindings:   1,
 			wantSeverity:   scanner.High,
-			wantConfidence: "Confirmed",
+			wantConfidence: scanner.ConfirmedConfidence,
 			wantParameter:  "q",
 			wantGrouped:    1,
 			wantEndpoints:  1,
@@ -231,7 +231,7 @@ func TestXSSModule(t *testing.T) {
 	})
 }
 
-func TestGroupingKeepsDifferentConfidenceTiersSeparate(t *testing.T) {
+func TestGroupingPromotesHighestConfidence(t *testing.T) {
 	t.Parallel()
 
 	findings := []scanner.Finding{
@@ -239,27 +239,88 @@ func TestGroupingKeepsDifferentConfidenceTiersSeparate(t *testing.T) {
 			Title:       "Reflected Cross-Site Scripting (XSS)",
 			Severity:    scanner.High,
 			OWASP:       "A03:2021 - Injection",
-			Confidence:  "Confirmed",
+			Confidence:  scanner.MediumConfidence,
 			Description: "same description",
 			URL:         "http://example.com/a",
-			Evidence:    "same evidence",
+			Evidence:    "medium evidence",
 			Remediation: "same remediation",
 		},
 		{
 			Title:       "Reflected Cross-Site Scripting (XSS)",
 			Severity:    scanner.High,
 			OWASP:       "A03:2021 - Injection",
-			Confidence:  "Potential",
+			Confidence:  scanner.ConfirmedConfidence,
 			Description: "same description",
 			URL:         "http://example.com/b",
-			Evidence:    "same evidence",
+			Evidence:    "confirmed evidence",
+			Remediation: "same remediation",
+		},
+		{
+			Title:       "Reflected Cross-Site Scripting (XSS)",
+			Severity:    scanner.High,
+			OWASP:       "A03:2021 - Injection",
+			Confidence:  scanner.LowConfidence,
+			Description: "same description",
+			URL:         "http://example.com/c",
+			Evidence:    "low evidence",
 			Remediation: "same remediation",
 		},
 	}
 
 	grouped := (&scanner.Result{Findings: findings}).Group()
-	if len(grouped) != 2 {
-		t.Fatalf("got %d grouped findings, want 2", len(grouped))
+	if len(grouped) != 1 {
+		t.Fatalf("got %d grouped findings, want 1", len(grouped))
+	}
+
+	g := grouped[0]
+	if g.Confidence != scanner.ConfirmedConfidence {
+		t.Errorf("got confidence %q, want %q", g.Confidence, scanner.ConfirmedConfidence)
+	}
+	if g.Evidence != "confirmed evidence" {
+		t.Errorf("got evidence %q, want %q", g.Evidence, "confirmed evidence")
+	}
+	if len(g.Endpoints) != 3 {
+		t.Errorf("got %d endpoints, want 3", len(g.Endpoints))
+	}
+}
+
+func TestGroupingDoesNotDowngradeConfidence(t *testing.T) {
+	t.Parallel()
+
+	findings := []scanner.Finding{
+		{
+			Title:       "Reflected Cross-Site Scripting (XSS)",
+			Severity:    scanner.High,
+			OWASP:       "A03:2021 - Injection",
+			Confidence:  scanner.ConfirmedConfidence,
+			Description: "same description",
+			URL:         "http://example.com/a",
+			Evidence:    "confirmed evidence",
+			Remediation: "same remediation",
+		},
+		{
+			Title:       "Reflected Cross-Site Scripting (XSS)",
+			Severity:    scanner.High,
+			OWASP:       "A03:2021 - Injection",
+			Confidence:  scanner.LowConfidence,
+			Description: "same description",
+			URL:         "http://example.com/b",
+			Evidence:    "low evidence",
+			Remediation: "same remediation",
+		},
+	}
+
+	grouped := (&scanner.Result{Findings: findings}).Group()
+	if len(grouped) != 1 {
+		t.Fatalf("got %d grouped findings, want 1", len(grouped))
+	}
+
+	g := grouped[0]
+	if g.Confidence != scanner.ConfirmedConfidence {
+		t.Errorf("got confidence %q, want %q", g.Confidence, scanner.ConfirmedConfidence)
+	}
+	if g.Evidence != "confirmed evidence" {
+		t.Errorf("got evidence %q, want %q", g.Evidence, "confirmed evidence")
 	}
 }
 
