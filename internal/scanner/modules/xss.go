@@ -206,14 +206,14 @@ func buildXSSFinding(ep crawler.Endpoint, cr xssCanaryResult) scanner.Finding {
 	}
 }
 
-func gradeXSSFinding(cr xssCanaryResult) (scanner.Severity, string) {
+func gradeXSSFinding(cr xssCanaryResult) (scanner.Severity, scanner.Confidence) {
 	switch cr.CtxType {
 	case "text/html":
-		return scanner.High, "Confirmed"
+		return scanner.High, scanner.ConfirmedConfidence
 	case "application/json":
-		return scanner.Medium, "Potential"
+		return scanner.Medium, scanner.MediumConfidence
 	default:
-		return scanner.Low, "Informational"
+		return scanner.Low, scanner.InformationalConfidence
 	}
 }
 
