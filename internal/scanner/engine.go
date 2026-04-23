@@ -85,9 +85,7 @@ func (r *Result) Group() []GroupedFinding {
 		title       string
 		severity    Severity
 		owasp       string
-		confidence  Confidence
 		description string
-		evidence    string
 		remediation string
 	}
 
@@ -99,13 +97,17 @@ func (r *Result) Group() []GroupedFinding {
 			title:       f.Title,
 			severity:    f.Severity,
 			owasp:       f.OWASP,
-			confidence:  f.Confidence,
 			description: f.Description,
-			evidence:    f.Evidence,
 			remediation: f.Remediation,
 		}
 
 		if g, ok := groups[k]; ok {
+			// If the new finding has higher confidence, promote the group's confidence and evidence.
+			if confidenceRank[f.Confidence] > confidenceRank[g.Confidence] {
+				g.Confidence = f.Confidence
+				g.Evidence = f.Evidence
+			}
+
 			// Check for URL deduplication within the group
 			exists := false
 			for _, end := range g.Endpoints {
