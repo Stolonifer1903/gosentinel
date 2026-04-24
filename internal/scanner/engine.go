@@ -8,8 +8,8 @@ import (
 	"github.com/Stolonifer1903/gosentinel/internal/crawler"
 )
 
-// Engine orchestrates all registered scanner modules, runs them concurrently,
-// and returns a deduplicated, severity-sorted slice of findings.
+// Engine orchestrates all registered scanner modules, running passive modules
+// concurrently and active modules sequentially to prevent data races.
 type Engine struct {
 	modules []Module
 }
@@ -35,8 +35,10 @@ type Result struct {
 	ModuleResults []ModuleResult
 }
 
-// Run executes all registered modules concurrently against the provided
-// endpoints, then merges and sorts the findings.
+// Run executes all registered modules against the provided endpoints.
+// It uses a two-phase execution strategy:
+// Phase 1: All passive modules run concurrently.
+// Phase 2: All active modules run sequentially in registration order.
 func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result, error) {
 	var (
 		mu            sync.Mutex
@@ -45,11 +47,22 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 		moduleResults []ModuleResult
 	)
 
+	// Partition modules to preserve registration order within each group.
+	var passive []Module
+	var active []Module
 	for _, mod := range e.modules {
+		if mod.Type() == TypePassive {
+			passive = append(passive, mod)
+		} else {
+			active = append(active, mod)
+		}
+	}
+
+	// Phase 1: Concurrent Passive Modules
+	for _, mod := range passive {
 		wg.Add(1)
 		go func(m Module) {
 			defer wg.Done()
-
 			findings, err := m.Run(ctx, endpoints)
 
 			mu.Lock()
@@ -64,8 +77,21 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 			mu.Unlock()
 		}(mod)
 	}
-
 	wg.Wait()
+
+	// Phase 2: Sequential Active Modules
+	for _, mod := range active {
+		findings, err := mod.Run(ctx, endpoints)
+
+		if findings != nil {
+			allFindings = append(allFindings, findings...)
+		}
+		moduleResults = append(moduleResults, ModuleResult{
+			ModuleName: mod.Name(),
+			Findings:   findings,
+			Error:      err,
+		})
+	}
 
 	// Sort all findings across modules by severity: Critical first.
 	sort.Slice(allFindings, func(i, j int) bool {
