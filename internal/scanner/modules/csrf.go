@@ -17,6 +17,8 @@ type CSRFModule struct{}
 
 func (m *CSRFModule) Name() string { return "Missing CSRF Token" }
 
+func (m *CSRFModule) Type() scanner.ModuleType { return scanner.TypePassive }
+
 // Run filters endpoints for state-changing forms and checks their parameters.
 func (m *CSRFModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]scanner.Finding, error) {
 	var findings []scanner.Finding
@@ -76,6 +78,7 @@ func (m *CSRFModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]s
 				Title:          "Missing Anti-CSRF Token",
 				Severity:       scanner.High,
 				OWASP:          descriptions.GetCategory(descriptions.CSRFTokenMissing),
+				Confidence:     scanner.HighConfidence,
 				Description:    descriptions.GetDescription(descriptions.CSRFTokenMissing),
 				URL:            ep.URL,
 				Method:         method,

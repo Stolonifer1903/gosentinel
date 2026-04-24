@@ -29,6 +29,8 @@ type StoredXSSModule struct {
 
 func (m *StoredXSSModule) Name() string { return "Stored XSS" }
 
+func (m *StoredXSSModule) Type() scanner.ModuleType { return scanner.TypeActive }
+
 func (m *StoredXSSModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]scanner.Finding, error) {
 	fmt.Fprintf(os.Stderr, "[!] Stored XSS: this module will WRITE test data to the target. Use Ctrl+C to skip.\n")
 
@@ -117,6 +119,11 @@ func (m *StoredXSSModule) sweepPhase(ctx context.Context, endpoints []crawler.En
 		}
 
 		for canary, probe := range canaryIndex {
+			// Filter out read endpoints that match the write endpoint to reduce noise from forms echoing their own values.
+			if ep.URL == probe.WriteEp.URL {
+				continue
+			}
+
 			// Since canary is just hex chars, html.EscapeString(canary) == canary.
 			// However, we follow the logic that finding the unique canary
 			// means we have a stored reflection.

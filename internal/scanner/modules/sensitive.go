@@ -65,6 +65,8 @@ type SensitiveModule struct{}
 
 func (m *SensitiveModule) Name() string { return "Sensitive Data Exposure" }
 
+func (m *SensitiveModule) Type() scanner.ModuleType { return scanner.TypePassive }
+
 // Run fetches the full body of each discovered endpoint and scans for sensitive patterns.
 func (m *SensitiveModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]scanner.Finding, error) {
 	var findings []scanner.Finding

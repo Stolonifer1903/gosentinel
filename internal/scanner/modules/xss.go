@@ -74,6 +74,8 @@ type xssCanaryResult struct {
 
 func (m *XSSModule) Name() string { return "Reflected XSS" }
 
+func (m *XSSModule) Type() scanner.ModuleType { return scanner.TypeActive }
+
 // Run actively injects payloads into form parameters and checks for reflection.
 func (m *XSSModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]scanner.Finding, error) {
 	select {

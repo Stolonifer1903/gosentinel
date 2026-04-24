@@ -61,6 +61,8 @@ type HeadersModule struct{}
 
 func (m *HeadersModule) Name() string { return "Security Headers" }
 
+func (m *HeadersModule) Type() scanner.ModuleType { return scanner.TypePassive }
+
 // Run fetches the root URL from each unique host in the endpoint list
 // and checks for missing or misconfigured security headers.
 func (m *HeadersModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]scanner.Finding, error) {
@@ -79,7 +81,7 @@ func (m *HeadersModule) Run(ctx context.Context, endpoints []crawler.Endpoint) (
 		}
 		checkedHosts[ep.URL] = true
 
-		findings = append(findings, auditHeaders(ep.URL, result.Headers)...)
+		findings = append(findings, auditHeaders(ep, result.Headers)...)
 	}
 
 	// Sort by severity rank descending.
@@ -92,7 +94,7 @@ func (m *HeadersModule) Run(ctx context.Context, endpoints []crawler.Endpoint) (
 
 // auditHeaders compares the given headers against the checklist and returns
 // one Finding per missing header, with descriptions populated from the central registry.
-func auditHeaders(targetURL string, headers http.Header) []scanner.Finding {
+func auditHeaders(ep crawler.Endpoint, headers http.Header) []scanner.Finding {
 	var findings []scanner.Finding
 
 	for headerKey, check := range securityHeaderChecks {
@@ -106,15 +108,17 @@ func auditHeaders(targetURL string, headers http.Header) []scanner.Finding {
 
 		if !present {
 			findings = append(findings, scanner.Finding{
-				Title:       "Missing Security Header: " + canonicalHeader(headerKey),
-				Severity:    check.Severity,
-				OWASP:       descriptions.GetCategory(check.CheckID),
-				Description: descriptions.GetDescription(check.CheckID),
-				URL:         targetURL,
-				Method:      "GET",
-				Evidence:    "Header '" + canonicalHeader(headerKey) + "' was not present in the response.",
-				Remediation: check.Remediation,
-				Timestamp:   time.Now(),
+				Title:          "Missing Security Header: " + canonicalHeader(headerKey),
+				Severity:       check.Severity,
+				OWASP:          descriptions.GetCategory(check.CheckID),
+				Confidence:     scanner.HighConfidence,
+				Description:    descriptions.GetDescription(check.CheckID),
+				URL:            ep.URL,
+				Method:         ep.Method,
+				EndpointDetail: ep.Method + " \u00b7 Source: " + ep.Source,
+				Evidence:       "Header '" + canonicalHeader(headerKey) + "' was not present in the response.",
+				Remediation:    check.Remediation,
+				Timestamp:      time.Now(),
 			})
 		}
 	}
