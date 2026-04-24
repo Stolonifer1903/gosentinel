@@ -23,7 +23,7 @@ type ScanResult struct {
 	Duration       time.Duration
 	StatusCode     int
 	Status         string
-	AllHeaders     http.Header
+	SeedURLHeaders http.Header
 	Findings       []scanner.GroupedFinding
 	Endpoints      []crawler.Endpoint
 	SeverityCounts map[string]int

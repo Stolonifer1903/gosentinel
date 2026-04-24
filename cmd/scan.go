@@ -243,7 +243,7 @@ func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []
 		Duration:     r.Duration,
 		StatusCode:   r.StatusCode,
 		Status:       r.Status,
-		AllHeaders:   r.Headers,
+		SeedURLHeaders: r.Headers,
 		Findings:     findings,
 		Endpoints:    endpoints,
 		ModuleErrors: modErrors,
