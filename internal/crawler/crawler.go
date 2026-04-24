@@ -48,10 +48,11 @@ func NewSpider(targetURL string, maxDepth int, concurrency int) (*Spider, error)
 
 // Crawl starts the BFS crawling process.
 func (s *Spider) Crawl(ctx context.Context) ([]Endpoint, error) {
-	currentLevel := []string{s.BaseURL.String()}
+	normalizedSeed := s.resolveURL(s.BaseURL.String(), "")
+	currentLevel := []string{normalizedSeed}
 
 	s.addEndpoint(Endpoint{
-		URL:    s.BaseURL.String(),
+		URL:    normalizedSeed,
 		Method: "GET",
 		Source: "Seed",
 	})
@@ -195,6 +196,13 @@ func (s *Spider) resolveURL(base, ref string) string {
 	}
 	// Strip fragments
 	resolved.Fragment = ""
+
+	if resolved.Path == "" {
+		resolved.Path = "/"
+	} else if resolved.Path != "/" && strings.HasSuffix(resolved.Path, "/") {
+		resolved.Path = strings.TrimSuffix(resolved.Path, "/")
+	}
+
 	return resolved.String()
 }
 

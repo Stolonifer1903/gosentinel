@@ -33,9 +33,9 @@ func TestSpider_DepthControl(t *testing.T) {
 		maxDepth      int
 		expectedLinks []string
 	}{
-		{"Depth 0", 0, []string{server.URL, server.URL + "/page1"}},
-		{"Depth 1", 1, []string{server.URL, server.URL + "/page1", server.URL + "/page2"}},
-		{"Depth 2", 2, []string{server.URL, server.URL + "/page1", server.URL + "/page2", server.URL + "/page3"}},
+		{"Depth 0", 0, []string{server.URL + "/", server.URL + "/page1"}},
+		{"Depth 1", 1, []string{server.URL + "/", server.URL + "/page1", server.URL + "/page2"}},
+		{"Depth 2", 2, []string{server.URL + "/", server.URL + "/page1", server.URL + "/page2", server.URL + "/page3"}},
 	}
 
 	for _, tc := range tests {
@@ -158,7 +158,7 @@ func TestSpider_FormExtraction(t *testing.T) {
 	}
 
 	// Check the standard form
-	loginForm, ok := formMap[server.URL+"/login"]
+	loginForm, ok := formMap[server.URL + "/login"]
 	if !ok {
 		t.Error("Missing /login form")
 	} else {
@@ -172,7 +172,7 @@ func TestSpider_FormExtraction(t *testing.T) {
 	}
 
 	// Check the implicit form (defaults to current URL, GET)
-	implicitForm, ok := formMap[server.URL]
+	implicitForm, ok := formMap[server.URL + "/"]
 	if !ok {
 		t.Error("Missing implicit form (action=current URL)")
 	} else {
@@ -209,10 +209,10 @@ func TestSpider_LinkExtraction(t *testing.T) {
 	}
 
 	expectedURLs := map[string]bool{
-		server.URL:                  true, // Seed
+		server.URL + "/":            true, // Seed
 		server.URL + "/absolute-path": true,
 		server.URL + "/relative-path": true,
-		server.URL + "?query=1":       true,
+		server.URL + "/?query=1":       true,
 		// Fragments are stripped, so "#fragment" resolves to the base URL and deduplicates
 	}
 

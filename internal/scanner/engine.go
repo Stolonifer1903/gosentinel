@@ -136,15 +136,17 @@ func (r *Result) Group() []GroupedFinding {
 
 			// Check for URL deduplication within the group
 			exists := false
+			normalizedURL := stripTrailingSlash(f.URL)
 			for _, end := range g.Endpoints {
-				if end.URL == f.URL && end.Detail == f.EndpointDetail {
+				if stripTrailingSlash(end.URL) == normalizedURL && end.Detail == f.EndpointDetail {
 					exists = true
 					break
 				}
 			}
 			if !exists {
-				g.Endpoints = append(g.Endpoints, AffectedEndpoint{URL: f.URL, Detail: f.EndpointDetail})
+				g.Endpoints = append(g.Endpoints, AffectedEndpoint{URL: normalizedURL, Detail: f.EndpointDetail})
 			}
+
 		} else {
 			groups[k] = &GroupedFinding{
 				Title:       f.Title,
@@ -154,7 +156,7 @@ func (r *Result) Group() []GroupedFinding {
 				Description: f.Description,
 				Evidence:    f.Evidence,
 				Remediation: f.Remediation,
-				Endpoints:   []AffectedEndpoint{{URL: f.URL, Detail: f.EndpointDetail}},
+				Endpoints:   []AffectedEndpoint{{URL: stripTrailingSlash(f.URL), Detail: f.EndpointDetail}},
 			}
 			order = append(order, k)
 		}
@@ -171,4 +173,11 @@ func (r *Result) Group() []GroupedFinding {
 	})
 
 	return result
+}
+
+func stripTrailingSlash(url string) string {
+	if len(url) > 1 && url[len(url)-1] == '/' {
+		return url[:len(url)-1]
+	}
+	return url
 }
