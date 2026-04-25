@@ -3,6 +3,7 @@ package modules
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -63,25 +64,55 @@ func (m *HeadersModule) Name() string { return "Security Headers" }
 
 func (m *HeadersModule) Type() scanner.ModuleType { return scanner.TypePassive }
 
-// Run fetches the root URL from each unique host in the endpoint list
-// and checks for missing or misconfigured security headers.
+// Run audits security headers for all discovered endpoints. Headers are fetched
+// once per origin (scheme + host) for efficiency, then findings are generated
+// for every GET endpoint so that Group() reports the full attack surface.
 func (m *HeadersModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]scanner.Finding, error) {
-	// Deduplicate by host — we only need to check each origin once.
-	checkedHosts := make(map[string]bool)
+	// Pass 1: Fetch headers once per origin. We store a *http.Header (nil = fetch failed).
+	originHeaders := make(map[string]http.Header)
+
+	for _, ep := range endpoints {
+		if ep.Method != "GET" {
+			continue
+		}
+
+		origin := ep.URL
+		if u, err := url.Parse(ep.URL); err == nil {
+			origin = u.Scheme + "://" + u.Host
+		}
+		if _, checked := originHeaders[origin]; checked {
+			continue
+		}
+
+		result, err := httpclient.FetchHeadersWithContext(ctx, ep.URL)
+		if err != nil {
+			originHeaders[origin] = nil // mark as checked-but-failed
+			continue
+		}
+		originHeaders[origin] = result.Headers
+	}
+
+	// Pass 2: For every GET endpoint, generate findings using the cached headers
+	// for that endpoint's origin. This way Group() will see one finding per
+	// (header, endpoint) pair and aggregate them under the correct grouped entry.
 	var findings []scanner.Finding
 
 	for _, ep := range endpoints {
-		if checkedHosts[ep.URL] || ep.Method != "GET" {
+		if ep.Method != "GET" {
 			continue
 		}
 
-		result, err := httpclient.FetchHeaders(ep.URL)
-		if err != nil {
-			continue
+		origin := ep.URL
+		if u, err := url.Parse(ep.URL); err == nil {
+			origin = u.Scheme + "://" + u.Host
 		}
-		checkedHosts[ep.URL] = true
 
-		findings = append(findings, auditHeaders(ep, result.Headers)...)
+		headers := originHeaders[origin]
+		if headers == nil {
+			continue // origin either failed to fetch or was not checked
+		}
+
+		findings = append(findings, auditHeaders(ep, headers)...)
 	}
 
 	// Sort by severity rank descending.
