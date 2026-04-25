@@ -48,8 +48,13 @@ func (m *CSRFModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]s
 			continue
 		}
 
-		// Create a unique key for this form submission to avoid duplicates
-		formKey := ep.URL + "|" + method + "|" + strings.Join(ep.Params, ",")
+		// Create a unique key for this form submission to avoid duplicates.
+		// Params are sorted before joining so that identical forms whose parameters
+		// were discovered in different orders are still recognised as the same form.
+		sortedParams := make([]string, len(ep.Params))
+		copy(sortedParams, ep.Params)
+		sort.Strings(sortedParams)
+		formKey := ep.URL + "|" + method + "|" + strings.Join(sortedParams, ",")
 		if flaggedForms[formKey] {
 			continue
 		}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 
@@ -123,9 +124,11 @@ func (s *Spider) addEndpoint(e Endpoint) {
 	s.endpointsMu.Lock()
 	defer s.endpointsMu.Unlock()
 
-	// Avoid duplicates in results
+	// Avoid duplicates in results. Params are compared in sorted order so that
+	// two endpoints with the same URL, method, and parameter set are treated as
+	// identical regardless of the order in which params were discovered.
 	for _, existing := range s.Endpoints {
-		if existing.URL == e.URL && existing.Method == e.Method && strings.Join(existing.Params, ",") == strings.Join(e.Params, ",") {
+		if existing.URL == e.URL && existing.Method == e.Method && sortedJoin(existing.Params) == sortedJoin(e.Params) {
 			return
 		}
 	}
@@ -255,4 +258,17 @@ func (s *Spider) parseForm(baseURL string, n *html.Node) Endpoint {
 		Params: params,
 		Source: "Form",
 	}
+}
+
+// sortedJoin returns a canonical, comma-joined string of params sorted
+// alphabetically. It operates on a copy so the original slice is not mutated.
+// Used by addEndpoint to perform order-independent duplicate detection.
+func sortedJoin(params []string) string {
+	if len(params) == 0 {
+		return ""
+	}
+	cp := make([]string, len(params))
+	copy(cp, params)
+	sort.Strings(cp)
+	return strings.Join(cp, ",")
 }
