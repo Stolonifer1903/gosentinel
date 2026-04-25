@@ -51,17 +51,19 @@ func (m *StoredXSSModule) injectPhase(ctx context.Context, endpoints []crawler.E
 	canaryIndex := make(map[string]storedXSSProbe)
 
 	for _, ep := range endpoints {
+		// Check for cancellation at every endpoint boundary, even if the endpoint
+		// has no injectable params, so we don't block on large link-only endpoint lists.
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		default:
+		}
+
 		if ep.Source != "Form" || len(ep.Params) == 0 {
 			continue
 		}
 
 		for _, param := range ep.Params {
-			select {
-			case <-ctx.Done():
-				return nil, nil, ctx.Err()
-			default:
-			}
-
 			canary := storedXSSCanary(ep.URL, ep.Method, param)
 
 			// Phase 1: Write plain-text canary
@@ -108,7 +110,10 @@ func (m *StoredXSSModule) sweepPhase(ctx context.Context, endpoints []crawler.En
 		default:
 		}
 
-		// Re-fetch every known page
+		// Re-fetch every endpoint discovered by the crawler. Note: reflections on
+		// pages outside the crawler's scope (e.g. authenticated routes, dynamically
+		// generated URLs not visited during crawling) will not be detected.
+		// This is a known scope limitation of the canary-sweep approach.
 		res, err := m.Client.Submit(httpclient.SubmitRequest{
 			Method: "GET",
 			URL:    ep.URL,
@@ -147,9 +152,11 @@ func (m *StoredXSSModule) sweepPhase(ctx context.Context, endpoints []crawler.En
 }
 
 func storedXSSCanary(url, method, param string) string {
-	h := fnv.New32a()
+	// FNV-64a gives a 64-bit hash space (~1.8×10¹⁹ values), making accidental
+	// canary collisions between different (url, method, param) tuples negligible.
+	h := fnv.New64a()
 	h.Write([]byte(url + "|" + method + "|" + param))
-	return fmt.Sprintf("gs-%08x", h.Sum32())
+	return fmt.Sprintf("gs-%016x", h.Sum64())
 }
 
 func buildStoredXSSFinding(probe storedXSSProbe, readURL string, ctxType string) scanner.Finding {

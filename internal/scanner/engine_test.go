@@ -53,7 +53,7 @@ func TestNewEngine(t *testing.T) {
 }
 
 func TestEngine_Run(t *testing.T) {
-	t.Run("findings collected and sorted", func(t *testing.T) {
+	t.Run("findings collected and sorted via Group()", func(t *testing.T) {
 		pMod := &MockModule{
 			name:    "passive",
 			modType: TypePassive,
@@ -80,15 +80,19 @@ func TestEngine_Run(t *testing.T) {
 			t.Errorf("expected 3 findings, got %d", len(res.Findings))
 		}
 
-		// Verify sorting (Critical -> High -> Medium)
-		if res.Findings[0].Severity != Critical {
-			t.Errorf("expected first finding to be Critical, got %s", res.Findings[0].Severity)
+		// Group() is the canonical sorted view; verify Critical -> High -> Medium ordering.
+		groups := res.Group()
+		if len(groups) != 3 {
+			t.Fatalf("expected 3 groups, got %d", len(groups))
 		}
-		if res.Findings[1].Severity != High {
-			t.Errorf("expected second finding to be High, got %s", res.Findings[1].Severity)
+		if groups[0].Severity != Critical {
+			t.Errorf("expected first group to be Critical, got %s", groups[0].Severity)
 		}
-		if res.Findings[2].Severity != Medium {
-			t.Errorf("expected third finding to be Medium, got %s", res.Findings[2].Severity)
+		if groups[1].Severity != High {
+			t.Errorf("expected second group to be High, got %s", groups[1].Severity)
+		}
+		if groups[2].Severity != Medium {
+			t.Errorf("expected third group to be Medium, got %s", groups[2].Severity)
 		}
 	})
 
@@ -125,19 +129,35 @@ func TestEngine_Run(t *testing.T) {
 		}
 	})
 
-	t.Run("context cancellation", func(t *testing.T) {
+	t.Run("context cancellation stops active modules", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		cancel() // Cancel immediately
+		cancel() // Cancel before Run() is called
 
 		e := NewEngine([]Module{&MockModule{name: "test", modType: TypeActive}})
-		res, err := e.Run(ctx, []crawler.Endpoint{{URL: "http://example.com"}})
+		_, err := e.Run(ctx, []crawler.Endpoint{{URL: "http://example.com"}})
 
-		// Depending on implementation, Run might return nil error but the module result will have context.Canceled
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		// Run() should return context.Canceled because the Phase 2 guard fires.
+		if err != context.Canceled {
+			t.Errorf("expected context.Canceled, got %v", err)
 		}
-		if len(res.ModuleResults) > 0 && res.ModuleResults[0].Error != context.Canceled {
-			t.Errorf("expected context.Canceled error in module result, got %v", res.ModuleResults[0].Error)
+	})
+
+	t.Run("second active module skipped after cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel before Run() is called
+
+		first := &MockModule{name: "first", modType: TypeActive}
+		second := &MockModule{name: "second", modType: TypeActive}
+
+		e := NewEngine([]Module{first, second})
+		e.Run(ctx, []crawler.Endpoint{{URL: "http://example.com"}})
+
+		// The Phase 2 context guard must prevent both modules from executing.
+		if first.called {
+			t.Error("expected first active module to be skipped on cancelled context")
+		}
+		if second.called {
+			t.Error("expected second active module to be skipped on cancelled context")
 		}
 	})
 }

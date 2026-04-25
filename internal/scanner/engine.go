@@ -39,6 +39,10 @@ type Result struct {
 // It uses a two-phase execution strategy:
 // Phase 1: All passive modules run concurrently.
 // Phase 2: All active modules run sequentially in registration order.
+//
+// The findings in Result.Findings are in insertion order (passive results first,
+// then active in registration order). Callers should use Result.Group() to obtain
+// a severity-sorted, deduplicated view.
 func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result, error) {
 	var (
 		mu            sync.Mutex
@@ -81,6 +85,15 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 
 	// Phase 2: Sequential Active Modules
 	for _, mod := range active {
+		// Check for cancellation before starting each active module.
+		// Active modules can mutate target state (e.g. StoredXSS writes data),
+		// so we must honour cancellation promptly rather than finishing the batch.
+		select {
+		case <-ctx.Done():
+			return &Result{Findings: allFindings, ModuleResults: moduleResults}, ctx.Err()
+		default:
+		}
+
 		findings, err := mod.Run(ctx, endpoints)
 
 		if findings != nil {
@@ -92,11 +105,6 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 			Error:      err,
 		})
 	}
-
-	// Sort all findings across modules by severity: Critical first.
-	sort.Slice(allFindings, func(i, j int) bool {
-		return allFindings[i].Rank() > allFindings[j].Rank()
-	})
 
 	return &Result{
 		Findings:      allFindings,
