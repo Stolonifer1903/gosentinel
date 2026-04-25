@@ -100,7 +100,12 @@ func (m *XSSModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]sc
 		for _, param := range ep.Params {
 			analysis, ok, err := runTieredXSSProbe(ctx, client, ep, param)
 			if err != nil {
-				return findings, err
+				// Only propagate genuine context cancellation — transient HTTP
+				// failures are swallowed inside runTieredXSSProbe already.
+				if ctx.Err() != nil {
+					return findings, ctx.Err()
+				}
+				continue
 			}
 			if !ok {
 				continue
@@ -140,13 +145,19 @@ func analyseResponse(res *httpclient.ResponseResult, canary, param string, probe
 		result.Reflected = true
 		result.Escaped = true
 	case strings.Contains(res.Body, canary):
+		// The full payload was partially stripped but the canary marker survived.
+		// This means the server mutated the injection — not a confirmed XSS.
 		result.Reflected = true
+		result.Escaped = true // treat partial-strip as escaped to avoid false positives
 	}
 
 	return result
 }
 
 func runTieredXSSProbe(ctx context.Context, client *httpclient.Client, ep crawler.Endpoint, param string) (xssCanaryResult, bool, error) {
+	var bestEscaped xssCanaryResult
+	hasEscapedHit := false
+
 	for tier := 1; tier <= 2; tier++ {
 		for _, probe := range xssPayloads {
 			if probe.Tier != tier {
@@ -181,29 +192,56 @@ func runTieredXSSProbe(ctx context.Context, client *httpclient.Client, ep crawle
 			canary := fmt.Sprintf("gosentinel_%s", param)
 			analysis := analyseResponse(result, canary, param, probe)
 			if analysis.Reflected && !analysis.Escaped {
+				// Confirmed unescaped reflection — highest confidence, return immediately.
 				return analysis, true, nil
+			}
+			if analysis.Reflected && analysis.Escaped && !hasEscapedHit {
+				// Server reflected the input but escaped it. Record as best candidate
+				// for a potential (lower-confidence) finding if no confirmed hit is found.
+				bestEscaped = analysis
+				hasEscapedHit = true
 			}
 		}
 	}
 
+	if hasEscapedHit {
+		return bestEscaped, true, nil
+	}
 	return xssCanaryResult{}, false, nil
 }
 
 func buildXSSFinding(ep crawler.Endpoint, cr xssCanaryResult) scanner.Finding {
 	severity, confidence := gradeXSSFinding(cr)
 
+	title := "Reflected Cross-Site Scripting (XSS)"
+	checkID := descriptions.XSSReflected
+	evidence := fmt.Sprintf("Parameter reflected unescaped in %s response (%s)", contentTypeLabel(cr.CtxType), cr.Context)
+	remediation := "Encode all user-supplied output using context-aware escaping. Apply a Content-Security-Policy header to restrict script execution."
+
+	if cr.Escaped {
+		// The parameter was reflected but the server escaped the payload, so we
+		// cannot confirm exploitability. Surface as a potential finding so the
+		// analyst can verify manually with alternative payloads.
+		title = "Potential Reflected XSS (Output Escaped)"
+		checkID = descriptions.XSSReflectedEscaped
+		severity = scanner.Low
+		confidence = scanner.MediumConfidence
+		evidence = fmt.Sprintf("Parameter reflected with output escaping in %s response (%s). Direct exploitation was not confirmed.", contentTypeLabel(cr.CtxType), cr.Context)
+		remediation = "Verify the escaping is context-appropriate and covers all injection vectors. Consider defense-in-depth with Content-Security-Policy."
+	}
+
 	return scanner.Finding{
-		Title:          "Reflected Cross-Site Scripting (XSS)",
+		Title:          title,
 		Severity:       severity,
-		OWASP:          descriptions.GetCategory(descriptions.XSSReflected),
+		OWASP:          descriptions.GetCategory(checkID),
 		Confidence:     confidence,
-		Description:    descriptions.GetDescription(descriptions.XSSReflected),
+		Description:    descriptions.GetDescription(checkID),
 		URL:            ep.URL,
 		Method:         strings.ToUpper(ep.Method),
 		Parameter:      cr.Param,
 		EndpointDetail: fmt.Sprintf("%s parameter=%s", strings.ToUpper(ep.Method), cr.Param),
-		Evidence:       fmt.Sprintf("Parameter reflected unescaped in %s response (%s)", contentTypeLabel(cr.CtxType), cr.Context),
-		Remediation:    "Encode all user-supplied output using context-aware escaping. Apply a Content-Security-Policy header to restrict script execution.",
+		Evidence:       evidence,
+		Remediation:    remediation,
 		Timestamp:      time.Now(),
 	}
 }

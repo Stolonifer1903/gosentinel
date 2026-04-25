@@ -112,6 +112,12 @@ var DescriptionRegistry = map[CheckID]VulnerabilityDescription{
 		Why:      "Reflected XSS allows attackers to inject and execute arbitrary JavaScript in the context of your application, running with the victim's privileges and access.",
 		Impact:   "Attackers can steal session cookies, authentication tokens, user data, or perform actions on behalf of users. Malicious scripts can redirect users to phishing sites or deliver malware.",
 	},
+	XSSReflectedEscaped: {
+		Category: "A03:2021 - Injection",
+		What:     "A request parameter was reflected in the response, but the server applied output encoding or escaping that may prevent direct script execution.",
+		Why:      "While the escaping may block the specific payload tested, it does not guarantee comprehensive protection. Other injection contexts, encoding bypasses, or browser-specific quirks may still allow exploitation.",
+		Impact:   "If the escaping is incomplete or context-inappropriate, attackers may still achieve script execution through alternative payloads, encoding tricks, or mutation-based bypasses.",
+	},
 	XSSStored: {
 		Category: "A03:2021 - Injection",
 		What:     "A stored (persistent) XSS canary was injected into a form parameter and later found rendered unescaped in a page response.",
