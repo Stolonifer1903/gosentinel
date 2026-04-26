@@ -281,7 +281,7 @@ func TestStoredXSSCanary(t *testing.T) {
 		t.Errorf("canaries for same input should be equal")
 	}
 
-	if len(c1) != 11 || c1[:3] != "gs-" {
+	if len(c1) != 19 || c1[:3] != "gs-" {
 		t.Errorf("invalid canary format: %s", c1)
 	}
 

@@ -21,92 +21,128 @@ func TestXSSModule(t *testing.T) {
 
 	module := &XSSModule{Client: httpclient.NewClient(ts.Client())}
 
+	type expectedFinding struct {
+		Title      string
+		Severity   scanner.Severity
+		Confidence scanner.Confidence
+		Parameter  string
+		Evidence   string
+	}
+
 	tests := []struct {
-		name           string
-		endpoints      []crawler.Endpoint
-		wantFindings   int
-		wantSeverity   scanner.Severity
-		wantConfidence scanner.Confidence
-		wantParameter  string
-		wantGrouped    int
-		wantEndpoints  int
-		wantEvidences  []string
+		name          string
+		endpoints     []crawler.Endpoint
+		wantGrouped   int
+		wantEndpoints int
+		wantFindings  []expectedFinding
 	}{
 		{
 			name: "GET reflected XSS flagged",
 			endpoints: []crawler.Endpoint{
 				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Form", Params: []string{"q"}},
 			},
-			wantFindings:   1,
-			wantSeverity:   scanner.High,
-			wantConfidence: scanner.ConfirmedConfidence,
-			wantParameter:  "q",
-			wantGrouped:    1,
-			wantEndpoints:  1,
-			wantEvidences:  []string{"Parameter reflected unescaped in text/html response (HTML body breakout)"},
+			wantGrouped:   1,
+			wantEndpoints: 1,
+			wantFindings: []expectedFinding{
+				{
+					Title:      "Reflected Cross-Site Scripting (XSS)",
+					Severity:   scanner.High,
+					Confidence: scanner.ConfirmedConfidence,
+					Parameter:  "q",
+					Evidence:   "Parameter reflected unescaped in text/html response (HTML body breakout)",
+				},
+			},
 		},
 		{
 			name: "POST reflected XSS flagged",
 			endpoints: []crawler.Endpoint{
 				{URL: ts.URL + "/reflect/post", Method: "POST", Source: "Form", Params: []string{"input"}},
 			},
-			wantFindings:   1,
-			wantSeverity:   scanner.High,
-			wantConfidence: scanner.ConfirmedConfidence,
-			wantParameter:  "input",
-			wantGrouped:    1,
-			wantEndpoints:  1,
-			wantEvidences:  []string{"Parameter reflected unescaped in text/html response (HTML body breakout)"},
+			wantGrouped:   1,
+			wantEndpoints: 1,
+			wantFindings: []expectedFinding{
+				{
+					Title:      "Reflected Cross-Site Scripting (XSS)",
+					Severity:   scanner.High,
+					Confidence: scanner.ConfirmedConfidence,
+					Parameter:  "input",
+					Evidence:   "Parameter reflected unescaped in text/html response (HTML body breakout)",
+				},
+			},
 		},
 		{
-			name: "Escaped reflection not flagged",
+			name: "Escaped reflection flagged as potential",
 			endpoints: []crawler.Endpoint{
 				{URL: ts.URL + "/safe/get", Method: "GET", Source: "Form", Params: []string{"q"}},
 			},
-			wantFindings:  0,
-			wantGrouped:   0,
-			wantEndpoints: 0,
+			wantGrouped:   1,
+			wantEndpoints: 1,
+			wantFindings: []expectedFinding{
+				{
+					Title:      "Potential Reflected XSS (Output Escaped)",
+					Severity:   scanner.Low,
+					Confidence: scanner.MediumConfidence,
+					Parameter:  "q",
+					Evidence:   "Parameter reflected with output escaping in text/html response (HTML body breakout). Direct exploitation was not confirmed.",
+				},
+			},
 		},
 		{
 			name: "JSON reflection downgraded",
 			endpoints: []crawler.Endpoint{
 				{URL: ts.URL + "/reflect/json", Method: "GET", Source: "Form", Params: []string{"q"}},
 			},
-			wantFindings:   1,
-			wantSeverity:   scanner.Medium,
-			wantConfidence: scanner.MediumConfidence,
-			wantParameter:  "q",
-			wantGrouped:    1,
-			wantEndpoints:  1,
-			wantEvidences:  []string{"Parameter reflected unescaped in application/json response (HTML body breakout)"},
+			wantGrouped:   1,
+			wantEndpoints: 1,
+			wantFindings: []expectedFinding{
+				{
+					Title:      "Reflected Cross-Site Scripting (XSS)",
+					Severity:   scanner.Medium,
+					Confidence: scanner.MediumConfidence,
+					Parameter:  "q",
+					Evidence:   "Parameter reflected unescaped in application/json response (HTML body breakout)",
+				},
+			},
 		},
 		{
-			name: "Only unsafe param flagged",
+			name: "Both safe and unsafe params flagged appropriately",
 			endpoints: []crawler.Endpoint{
 				{URL: ts.URL + "/reflect/partial", Method: "GET", Source: "Form", Params: []string{"safe", "unsafe"}},
 			},
-			wantFindings:   1,
-			wantSeverity:   scanner.High,
-			wantConfidence: scanner.ConfirmedConfidence,
-			wantParameter:  "unsafe",
-			wantGrouped:    1,
-			wantEndpoints:  1,
-			wantEvidences:  []string{"Parameter reflected unescaped in text/html response (HTML body breakout)"},
+			wantGrouped:   2,
+			wantEndpoints: 1,
+			wantFindings: []expectedFinding{
+				{
+					Title:      "Potential Reflected XSS (Output Escaped)",
+					Severity:   scanner.Low,
+					Confidence: scanner.MediumConfidence,
+					Parameter:  "safe",
+					Evidence:   "Parameter reflected with output escaping in text/html response (HTML body breakout). Direct exploitation was not confirmed.",
+				},
+				{
+					Title:      "Reflected Cross-Site Scripting (XSS)",
+					Severity:   scanner.High,
+					Confidence: scanner.ConfirmedConfidence,
+					Parameter:  "unsafe",
+					Evidence:   "Parameter reflected unescaped in text/html response (HTML body breakout)",
+				},
+			},
 		},
 		{
 			name: "Non-form endpoint ignored",
 			endpoints: []crawler.Endpoint{
 				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "API", Params: []string{"q"}},
 			},
-			wantFindings:  0,
 			wantGrouped:   0,
 			wantEndpoints: 0,
+			wantFindings:  nil,
 		},
 		{
-			name:         "Empty endpoints slice",
-			endpoints:    []crawler.Endpoint{},
-			wantFindings: 0,
-			wantGrouped:  0,
+			name:          "Empty endpoints slice",
+			endpoints:     []crawler.Endpoint{},
+			wantGrouped:   0,
+			wantEndpoints: 0,
+			wantFindings:  nil,
 		},
 		{
 			name: "Grouped findings across two URLs",
@@ -114,15 +150,23 @@ func TestXSSModule(t *testing.T) {
 				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Form", Params: []string{"q"}},
 				{URL: ts.URL + "/reflect/get-alt", Method: "GET", Source: "Form", Params: []string{"q"}},
 			},
-			wantFindings:   2,
-			wantSeverity:   scanner.High,
-			wantConfidence: scanner.ConfirmedConfidence,
-			wantParameter:  "q",
-			wantGrouped:    1,
-			wantEndpoints:  2,
-			wantEvidences: []string{
-				"Parameter reflected unescaped in text/html response (HTML body breakout)",
-				"Parameter reflected unescaped in text/html response (HTML body breakout)",
+			wantGrouped:   1,
+			wantEndpoints: 2,
+			wantFindings: []expectedFinding{
+				{
+					Title:      "Reflected Cross-Site Scripting (XSS)",
+					Severity:   scanner.High,
+					Confidence: scanner.ConfirmedConfidence,
+					Parameter:  "q",
+					Evidence:   "Parameter reflected unescaped in text/html response (HTML body breakout)",
+				},
+				{
+					Title:      "Reflected Cross-Site Scripting (XSS)",
+					Severity:   scanner.High,
+					Confidence: scanner.ConfirmedConfidence,
+					Parameter:  "q",
+					Evidence:   "Parameter reflected unescaped in text/html response (HTML body breakout)",
+				},
 			},
 		},
 		{
@@ -130,13 +174,17 @@ func TestXSSModule(t *testing.T) {
 			endpoints: []crawler.Endpoint{
 				{URL: ts.URL + "/reflect/fallback", Method: "GET", Source: "Form", Params: []string{"q"}},
 			},
-			wantFindings:   1,
-			wantSeverity:   scanner.High,
-			wantConfidence: scanner.ConfirmedConfidence,
-			wantParameter:  "q",
-			wantGrouped:    1,
-			wantEndpoints:  1,
-			wantEvidences:  []string{"Parameter reflected unescaped in text/html response (Encoded javascript URI anchor)"},
+			wantGrouped:   1,
+			wantEndpoints: 1,
+			wantFindings: []expectedFinding{
+				{
+					Title:      "Reflected Cross-Site Scripting (XSS)",
+					Severity:   scanner.High,
+					Confidence: scanner.ConfirmedConfidence,
+					Parameter:  "q",
+					Evidence:   "Parameter reflected unescaped in text/html response (Encoded javascript URI anchor)",
+				},
+			},
 		},
 	}
 
@@ -150,8 +198,8 @@ func TestXSSModule(t *testing.T) {
 				t.Fatalf("Run returned error: %v", err)
 			}
 
-			if len(findings) != tt.wantFindings {
-				t.Fatalf("got %d findings, want %d", len(findings), tt.wantFindings)
+			if len(findings) != len(tt.wantFindings) {
+				t.Fatalf("got %d findings, want %d", len(findings), len(tt.wantFindings))
 			}
 
 			grouped := (&scanner.Result{Findings: findings}).Group()
@@ -162,34 +210,45 @@ func TestXSSModule(t *testing.T) {
 				t.Fatalf("got %d grouped endpoints, want %d", len(grouped[0].Endpoints), tt.wantEndpoints)
 			}
 
-			if tt.wantFindings == 0 {
+			if len(tt.wantFindings) == 0 {
 				return
 			}
 
 			var gotEvidences []string
+			var wantEvidences []string
+
+			// We sort both so we can easily compare when there are multiple findings.
+			// The structs map exactly if we match them up or just verify the fields exist.
 			for _, finding := range findings {
-				if finding.Title != "Reflected Cross-Site Scripting (XSS)" {
-					t.Fatalf("unexpected title %q", finding.Title)
-				}
-				if finding.Severity != tt.wantSeverity {
-					t.Fatalf("got severity %q, want %q", finding.Severity, tt.wantSeverity)
-				}
-				if finding.Confidence != tt.wantConfidence {
-					t.Fatalf("got confidence %q, want %q", finding.Confidence, tt.wantConfidence)
-				}
-				if finding.Parameter != tt.wantParameter {
-					t.Fatalf("got parameter %q, want %q", finding.Parameter, tt.wantParameter)
-				}
 				gotEvidences = append(gotEvidences, finding.Evidence)
 			}
+			for _, wantF := range tt.wantFindings {
+				wantEvidences = append(wantEvidences, wantF.Evidence)
+			}
 
-			if len(tt.wantEvidences) > 0 {
-				sort.Strings(gotEvidences)
-				sort.Strings(tt.wantEvidences)
-				for i := range tt.wantEvidences {
-					if gotEvidences[i] != tt.wantEvidences[i] {
-						t.Fatalf("got evidences %v, want %v", gotEvidences, tt.wantEvidences)
+			sort.Strings(gotEvidences)
+			sort.Strings(wantEvidences)
+			for i := range wantEvidences {
+				if gotEvidences[i] != wantEvidences[i] {
+					t.Fatalf("got evidences %v, want %v", gotEvidences, wantEvidences)
+				}
+			}
+
+			// Validate titles, severities, confidences and parameters
+			for _, wantF := range tt.wantFindings {
+				found := false
+				for _, finding := range findings {
+					if finding.Evidence == wantF.Evidence &&
+						finding.Title == wantF.Title &&
+						finding.Severity == wantF.Severity &&
+						finding.Confidence == wantF.Confidence &&
+						finding.Parameter == wantF.Parameter {
+						found = true
+						break
 					}
+				}
+				if !found {
+					t.Fatalf("expected finding %+v not found in actual findings %+v", wantF, findings)
 				}
 			}
 		})
@@ -412,7 +471,7 @@ func TestAnalyseResponse(t *testing.T) {
 		}
 	})
 
-	t.Run("canary only reflection is treated as unescaped", func(t *testing.T) {
+	t.Run("canary only reflection is treated as escaped", func(t *testing.T) {
 		t.Parallel()
 
 		result := analyseResponse(&httpclient.ResponseResult{
@@ -420,8 +479,8 @@ func TestAnalyseResponse(t *testing.T) {
 			ContentType: "text/html",
 		}, "gosentinel_q", "q", probe)
 
-		if !result.Reflected || result.Escaped {
-			t.Fatalf("expected reflected=true escaped=false, got %+v", result)
+		if !result.Reflected || !result.Escaped {
+			t.Fatalf("expected reflected=true escaped=true, got %+v", result)
 		}
 	})
 
