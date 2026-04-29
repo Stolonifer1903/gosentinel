@@ -301,9 +301,26 @@ function App() {
         </div>
       </main>
 
-      {/* Finding Inspector - Side Drawer */}
+      {/* Finding Inspector Modal */}
       <FindingInspector 
-        finding={selectedFinding} 
+        finding={selectedFinding}
+        totalFindings={activeReport?.Findings?.length}
+        currentIndex={
+          selectedFinding && activeReport?.Findings
+            ? activeReport.Findings.findIndex(
+                (f) => f.Title === selectedFinding.Title && f.OWASP === selectedFinding.OWASP
+              )
+            : undefined
+        }
+        onNavigate={(dir) => {
+          if (!activeReport || !selectedFinding) return;
+          const idx = activeReport.Findings.findIndex(
+            (f) => f.Title === selectedFinding.Title && f.OWASP === selectedFinding.OWASP
+          );
+          if (idx === -1) return;
+          if (dir === "prev" && idx > 0) setSelectedFinding(activeReport.Findings[idx - 1]);
+          if (dir === "next" && idx < activeReport.Findings.length - 1) setSelectedFinding(activeReport.Findings[idx + 1]);
+        }}
         onClose={() => setSelectedFinding(null)} 
       />
     </div>
