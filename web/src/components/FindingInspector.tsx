@@ -137,7 +137,7 @@ function FindingInspector({ finding, onClose }: Props) {
 
                   {/* Evidence Block */}
                   {endpoint.Detail && (
-                    <div className="p-4 bg-black/40 font-mono text-[11px] leading-relaxed text-brand-muted">
+                    <div className="p-4 bg-brand-surface/40 font-mono text-[11px] leading-relaxed text-brand-muted">
                       <div className="mb-2 text-[9px] uppercase tracking-widest text-brand-muted/50 border-b border-brand-border/50 pb-1">
                         Evidence / Pattern Match
                       </div>
