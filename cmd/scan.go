@@ -56,7 +56,7 @@ func init() {
 	scanCmd.Flags().IntP("depth", "d", 2, "Crawler depth limit (how many links deep to follow)")
 	scanCmd.Flags().IntP("concurrency", "c", 10, "Number of concurrent network requests")
 	scanCmd.Flags().StringP("output", "o", "", "Write results to a file (.html or .json)")
-	scanCmd.Flags().Bool("confirm-stored-xss", false, "Enable 2-phase verification of stored XSS via automated script injection")
+	scanCmd.Flags().BoolP("confirm-stored-xss", "x", false, "Enable 2-phase verification of stored XSS via automated script injection")
 
 	// Mark --url as required so Cobra validates it before RunE is called.
 	_ = scanCmd.MarkFlagRequired("url")
@@ -118,7 +118,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		&modules.SensitiveModule{},
 		&modules.CSRFModule{},
 		&modules.XSSModule{Client: sharedClient},
-		&modules.StoredXSSModule{Client: sharedClient, Confirm: confirmStored},
+		modules.NewStoredXSSModule(sharedClient, confirmStored),
 	}
 	engine := scanner.NewEngine(activeModules)
 	scanResult, err := engine.Run(cmd.Context(), endpoints)
