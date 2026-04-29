@@ -1,9 +1,11 @@
 package modules
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -27,12 +29,28 @@ type StoredXSSModule struct {
 	Confirm bool
 }
 
+// NewStoredXSSModule creates a new StoredXSSModule.
+func NewStoredXSSModule(client *httpclient.Client, confirm bool) *StoredXSSModule {
+	return &StoredXSSModule{
+		Client:  client,
+		Confirm: confirm,
+	}
+}
+
 func (m *StoredXSSModule) Name() string { return "Stored XSS" }
 
 func (m *StoredXSSModule) Type() scanner.ModuleType { return scanner.TypeActive }
 
 func (m *StoredXSSModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]scanner.Finding, error) {
-	fmt.Fprintf(os.Stderr, "[!] Stored XSS: this module will WRITE test data to the target. Use Ctrl+C to skip.\n")
+	if !m.Confirm {
+		proceed, err := m.awaitConfirmation(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !proceed {
+			return nil, nil
+		}
+	}
 
 	probes, canaryIndex, err := m.injectPhase(ctx, endpoints)
 	if err != nil {
@@ -44,6 +62,45 @@ func (m *StoredXSSModule) Run(ctx context.Context, endpoints []crawler.Endpoint)
 	}
 
 	return m.sweepPhase(ctx, endpoints, canaryIndex)
+}
+
+func (m *StoredXSSModule) awaitConfirmation(ctx context.Context) (bool, error) {
+	fmt.Fprintf(os.Stderr, "[!] Stored XSS: this module will WRITE test data to the target. Proceed? [y/N]: ")
+
+	type result struct {
+		input string
+		err   error
+	}
+	
+	// Buffered channel prevents deadlock, but the goroutine may still be blocked 
+	// on ReadString for the lifetime of the process if ctx is canceled.
+	// In a CLI tool this is acceptable.
+	ch := make(chan result, 1)
+
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
+		ch <- result{input, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case res := <-ch:
+		if res.err != nil {
+			// Treating EOF as a graceful skip (rather than an error) is the correct default
+			// since it handles /dev/null stdin gracefully.
+			if res.err == io.EOF {
+				return false, nil
+			}
+			return false, res.err
+		}
+		ans := strings.ToLower(strings.TrimSpace(res.input))
+		if ans == "y" || ans == "yes" {
+			return true, nil
+		}
+		return false, nil
+	}
 }
 
 func (m *StoredXSSModule) injectPhase(ctx context.Context, endpoints []crawler.Endpoint) ([]storedXSSProbe, map[string]storedXSSProbe, error) {
