@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -19,7 +20,7 @@ func TestStoredXSSModule(t *testing.T) {
 	defer ts.Close()
 
 	client := httpclient.NewClient(ts.Client())
-	module := &StoredXSSModule{Client: client}
+	module := NewStoredXSSModule(client, true)
 
 	t.Run("Canary stored and found on read page", func(t *testing.T) {
 		ts.reset()
@@ -220,7 +221,7 @@ func TestStoredXSSModule(t *testing.T) {
 		errClient := httpclient.NewClient(errSrv.Client())
 		errSrv.Close()
 
-		mod := &StoredXSSModule{Client: errClient}
+		mod := NewStoredXSSModule(errClient, true)
 		endpoints := []crawler.Endpoint{
 			{URL: errSrv.URL + "/post", Method: "POST", Source: "Form", Params: []string{"x"}},
 			{URL: errSrv.URL + "/view", Method: "GET", Source: "Link"},
@@ -270,6 +271,52 @@ func TestStoredXSSModule(t *testing.T) {
 			t.Fatalf("expected 1 finding from /view despite /hang-up error, got %d", len(findings))
 		}
 	})
+}
+
+func TestStoredXSSConfirmationPrompt(t *testing.T) {
+	// Note: t.Parallel() must not be used here since we are mutating os.Stdin
+
+	origStdin := os.Stdin
+	defer func() { os.Stdin = origStdin }()
+
+	tests := []struct {
+		name        string
+		input       string
+		wantProceed bool
+	}{
+		{"Confirm with yes", "yes\n", true},
+		{"Confirm with y", "y\n", true},
+		{"Reject with no", "no\n", false},
+		{"Reject with n", "n\n", false},
+		{"Reject with empty", "\n", false},
+		{"Reject with EOF", "", false}, // simulates EOF on reading Stdin
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatalf("os.Pipe failed: %v", err)
+			}
+
+			os.Stdin = r
+			go func() {
+				if tt.input != "" {
+					w.Write([]byte(tt.input))
+				}
+				w.Close() // closing writer simulates EOF if no more input
+			}()
+
+			mod := NewStoredXSSModule(nil, false)
+			proceed, err := mod.awaitConfirmation(context.Background())
+			if err != nil {
+				t.Fatalf("awaitConfirmation returned error: %v", err)
+			}
+			if proceed != tt.wantProceed {
+				t.Errorf("awaitConfirmation() = %v, want %v", proceed, tt.wantProceed)
+			}
+		})
+	}
 }
 
 func TestStoredXSSCanary(t *testing.T) {
