@@ -1,28 +1,58 @@
 @import "tailwindcss";
 
+:root {
+  /* Dark Theme (Default) */
+  --brand-bg: #09090b;
+  --brand-surface: #18181b;
+  --brand-border: #27272a;
+  --brand-text: #fafafa;
+  --brand-muted: #a1a1aa; /* Zinc 400 - slightly lighter for better contrast in dark */
+
+  --brand-cyan: #2dd4bf;
+
+  --severity-critical: #ef4444;
+  --severity-high: #f97316;
+  --severity-medium: #f59e0b;
+  --severity-low: #38bdf8;
+  --severity-info: #71717a;
+  --severity-safe: #10b981;
+}
+
+:root.light {
+  /* Light Theme */
+  --brand-bg: #ffffff;
+  --brand-surface: #f4f4f5;
+  --brand-border: #e4e4e7;
+  --brand-text: #09090b;
+  --brand-muted: #71717a;
+
+  --brand-cyan: #0d9488;
+}
+
 @theme {
   /* Core Palette - Neutrals */
-  --color-brand-bg: #09090b; /* Slate 950 */
-  --color-brand-surface: #18181b; /* Zinc 900 */
-  --color-brand-border: #27272a; /* Zinc 800 */
-  --color-brand-text: #fafafa; /* Zinc 50 */
-  --color-brand-muted: #71717a; /* Zinc 500 */
+  --color-brand-bg: var(--brand-bg);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-border: var(--brand-border);
+  --color-brand-text: var(--brand-text);
+  --color-brand-muted: var(--brand-muted);
 
   /* Primary Accent */
-  --color-brand-cyan: #2dd4bf; /* Teal 400 - Vercel style accent */
+  --color-brand-cyan: var(--brand-cyan);
 
   /* Semantic Colors - Strictly Functional */
-  --color-severity-critical: #ef4444; /* Red 500 */
-  --color-severity-high: #f97316; /* Orange 500 */
-  --color-severity-medium: #f59e0b; /* Amber 500 */
-  --color-severity-low: #38bdf8; /* Sky 400 */
-  --color-severity-info: #71717a; /* Zinc 500 */
-  --color-severity-safe: #10b981; /* Emerald 500 */
+  --color-severity-critical: var(--severity-critical);
+  --color-severity-high: var(--severity-high);
+  --color-severity-medium: var(--severity-medium);
+  --color-severity-low: var(--severity-low);
+  --color-severity-info: var(--severity-info);
+  --color-severity-safe: var(--severity-safe);
 
   /* Typography */
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Geist Mono", monospace;
 }
+
 
 @layer base {
   :root {

@@ -19,6 +19,7 @@ import VulnerabilityTable from "./components/VulnerabilityTable";
 import FindingInspector from "./components/FindingInspector";
 import AttackSurfaceTable from "./components/AttackSurfaceTable";
 import ScanOverview from "./components/ScanOverview";
+import ThemeToggle from "./components/ThemeToggle";
 import type { ScanResult, GroupedFinding } from "./types/scan";
 
 function App() {
@@ -147,6 +148,7 @@ function App() {
           </div>
 
           <div className="flex items-center gap-4 pl-4">
+            <ThemeToggle />
             <button className="text-brand-muted hover:text-brand-text relative">
               <Bell size={18} />
               <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-brand-cyan rounded-full border-2 border-brand-bg"></span>
