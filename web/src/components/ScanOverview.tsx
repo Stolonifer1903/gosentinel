@@ -69,7 +69,7 @@ function ScanOverview({ report }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-border/50">
-                {Object.entries(report.AllHeaders).map(([key, values]) => (
+                {report.SeedURLHeaders && Object.entries(report.SeedURLHeaders).map(([key, values]) => (
                   <tr key={key} className="group hover:bg-brand-surface/30">
                     <td className="px-4 py-2 align-top text-xs font-bold text-brand-cyan font-mono group-hover:text-brand-text transition-colors">{key}</td>
                     <td className="px-4 py-2 align-top text-xs text-brand-muted font-mono break-all">{values.join(', ')}</td>

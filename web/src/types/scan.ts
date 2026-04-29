@@ -33,7 +33,7 @@ export interface ScanResult {
   Duration: number; 
   StatusCode: number;
   Status: string;
-  AllHeaders: Record<string, string[]>;
+  SeedURLHeaders: Record<string, string[]>;
   Findings: GroupedFinding[];
   Endpoints: Endpoint[];
   SeverityCounts: Record<string, number>;
