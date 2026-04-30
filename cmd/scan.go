@@ -41,7 +41,8 @@ var scanCmd = &cobra.Command{
 		cyan("  • Sensitive Data   ") + dim("(Passive)") + white(" — Scans for secrets, keys, and debug leaks.\n") +
 		cyan("  • CSRF Protection  ") + dim("(Passive)") + white(" — Detects state-changing forms without tokens.\n") +
 		cyan("  • Reflected XSS    ") + dim("(Active) ") + white(" — Tests parameters for immediate reflection.\n") +
-		cyan("  • Stored XSS       ") + dim("(Active) ") + white(" — 2-phase canary detection for persisted data.\n\n") +
+		cyan("  • Stored XSS       ") + dim("(Active) ") + white(" — 2-phase canary detection for persisted data.\n") +
+		cyan("  • SQL Injection    ") + dim("(Active) ") + white(" — Tests for error-based and time-based SQLi.\n\n") +
 		hiWhite("Usage:\n") +
 		white("  gosentinel scan --url <target> [flags]\n\n") +
 		hiWhite("Examples:\n") +
@@ -119,6 +120,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		&modules.CSRFModule{},
 		&modules.XSSModule{Client: sharedClient},
 		modules.NewStoredXSSModule(sharedClient, confirmStored),
+		&modules.SQLiModule{Client: sharedClient, Config: modules.DefaultSQLiConfig},
 	}
 	engine := scanner.NewEngine(activeModules)
 	scanResult, err := engine.Run(cmd.Context(), endpoints)
