@@ -151,18 +151,18 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	}
 
 	// ── 5. Write report file if --output was given ────────────────────────────
-	if output != "" {
+	if output != "" && scanResult != nil {
 		modErrors := make(map[string]string)
-		if scanResult != nil {
-			for _, mr := range scanResult.ModuleResults {
-				if mr.Error != nil {
-					modErrors[mr.ModuleName] = mr.Error.Error()
-				}
+		for _, mr := range scanResult.ModuleResults {
+			if mr.Error != nil {
+				modErrors[mr.ModuleName] = mr.Error.Error()
 			}
 		}
 		if err := writeReport(output, parsedURL.String(), httpResult, scanResult.Group(), endpoints, modErrors); err != nil {
 			return fmt.Errorf("writing report: %w", err)
 		}
+	} else if output != "" {
+		fmt.Printf(" %s Skipping report — scanner did not produce results.\n\n", yellow("[!]"))
 	}
 
 	return nil
