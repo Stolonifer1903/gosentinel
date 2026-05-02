@@ -14,16 +14,18 @@ import (
 
 // SQLiModuleConfig allows fine-tuning the SQLi detection behavior.
 type SQLiModuleConfig struct {
-	TimeBasedDelay   time.Duration // Duration to sleep in time-based probes (default: 5s)
-	TimeBasedTimeout time.Duration // Max time to wait for a time-based probe (default: 12s)
-	ConfirmTimeBased bool          // Whether to re-probe to confirm time-based findings (default: true)
+	TimeBasedDelay        time.Duration // Duration to sleep in time-based probes (default: 5s)
+	TimeBasedTimeout      time.Duration // Max time to wait for a time-based probe (default: 12s)
+	ConfirmTimeBased      bool          // Whether to re-probe to confirm time-based findings (default: true)
+	EnableHeaderInjection bool          // If true, test injection via HTTP headers (experimental, high FP rate)
 }
 
 // DefaultSQLiConfig provides sensible defaults for SQLi detection.
 var DefaultSQLiConfig = SQLiModuleConfig{
-	TimeBasedDelay:   5 * time.Second,
-	TimeBasedTimeout: 12 * time.Second,
-	ConfirmTimeBased: true,
+	TimeBasedDelay:        5 * time.Second,
+	TimeBasedTimeout:      12 * time.Second,
+	ConfirmTimeBased:      true,
+	EnableHeaderInjection: false, // Disabled: bare SQL fragments in headers are ineffective
 }
 
 var sqlErrorSignatures = []string{
@@ -90,50 +92,57 @@ func (m *SQLiModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]s
 		default:
 		}
 
-		// 1. Target URL parameters and Form fields
+		// Skip endpoints with no injectable parameters.
+		if len(ep.Params) == 0 {
+			continue
+		}
+
+		// Fetch baseline once per endpoint, shared by all probes.
+		baseline, err := m.getBaseline(ctx, client, ep)
+		if err != nil {
+			// Propagate context cancellation instead of swallowing it.
+			if ctx.Err() != nil {
+				return findings, ctx.Err()
+			}
+			continue // Transient network error — skip this endpoint
+		}
+
+		// 1. Probe URL parameters / form fields
 		for _, param := range ep.Params {
-			found, err := m.probeEndpoint(ctx, client, ep, param, "Param", seen)
+			found, err := m.probeEndpoint(ctx, client, ep, param, "Param", seen, baseline)
 			if err != nil && ctx.Err() != nil {
 				return findings, ctx.Err()
 			}
 			findings = append(findings, found...)
 		}
 
-		// 2. Target Headers
-		for _, header := range injectionHeaders {
-			found, err := m.probeEndpoint(ctx, client, ep, header, "Header", seen)
-			if err != nil && ctx.Err() != nil {
-				return findings, ctx.Err()
+		// 2. Header-based injection (experimental, disabled by default).
+		if m.Config.EnableHeaderInjection {
+			for _, header := range injectionHeaders {
+				found, err := m.probeEndpoint(ctx, client, ep, header, "Header", seen, baseline)
+				if err != nil && ctx.Err() != nil {
+					return findings, ctx.Err()
+				}
+				findings = append(findings, found...)
 			}
-			findings = append(findings, found...)
 		}
 	}
 
 	return findings, nil
 }
 
-func (m *SQLiModule) probeEndpoint(ctx context.Context, client *httpclient.Client, ep crawler.Endpoint, target, targetType string, seen map[string]struct{}) ([]scanner.Finding, error) {
+func (m *SQLiModule) probeEndpoint(ctx context.Context, client *httpclient.Client, ep crawler.Endpoint, target, targetType string, seen map[string]struct{}, baseline *httpclient.ResponseResult) ([]scanner.Finding, error) {
 	var findings []scanner.Finding
-
-	// Measure baseline first
-	baseline, err := m.getBaseline(ctx, client, ep)
-	if err != nil {
-		return nil, nil // Skip if we can't get a baseline
-	}
 
 	// 1. Error-Based SQLi
 	for _, payload := range errorPayloads {
-		dedupKey := fmt.Sprintf("%s|%s|%s|ERROR", ep.URL, target, targetType)
-		if _, ok := seen[dedupKey]; ok {
-			continue
-		}
-
 		result, err := m.submitProbe(ctx, client, ep, target, targetType, payload)
 		if err != nil {
 			continue
 		}
 
 		if m.detectError(result.Body, baseline.Body) {
+			dedupKey := fmt.Sprintf("%s|%s|%s|ERROR", ep.URL, target, targetType)
 			seen[dedupKey] = struct{}{}
 			findings = append(findings, m.buildFinding(ep, target, targetType, payload, "Error-Based SQL Injection", descriptions.SQLiErrorBased, scanner.High, scanner.ConfirmedConfidence))
 			break // One error payload is enough per target
@@ -148,11 +157,6 @@ func (m *SQLiModule) probeEndpoint(ctx context.Context, client *httpclient.Clien
 	delaySec := int(delay.Seconds())
 
 	for _, payload := range timePayloads(delaySec) {
-		dedupKey := fmt.Sprintf("%s|%s|%s|TIME", ep.URL, target, targetType)
-		if _, ok := seen[dedupKey]; ok {
-			continue
-		}
-
 		// Use a context with the configured timeout for time-based probes
 		timeout := m.Config.TimeBasedTimeout
 		if timeout == 0 {
@@ -181,6 +185,7 @@ func (m *SQLiModule) probeEndpoint(ctx context.Context, client *httpclient.Clien
 			}
 
 			if confirmed {
+				dedupKey := fmt.Sprintf("%s|%s|%s|TIME", ep.URL, target, targetType)
 				seen[dedupKey] = struct{}{}
 				findings = append(findings, m.buildFinding(ep, target, targetType, payload, "Time-Based SQL Injection (Blind)", descriptions.SQLiTimeBased, scanner.Critical, scanner.ConfirmedConfidence))
 				break // One time payload is enough per target

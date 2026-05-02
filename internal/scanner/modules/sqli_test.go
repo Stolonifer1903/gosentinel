@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -171,3 +173,120 @@ func TestSQLiModule_ContextCancellation(t *testing.T) {
 		t.Errorf("Expected context.Canceled, got %v", err)
 	}
 }
+
+func TestSQLiModule_AllPayloadsTested(t *testing.T) {
+	var receivedPayloads []string
+	var mu sync.Mutex
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		q := r.URL.Query().Get("q")
+		if q != "" && q != "1" { // Ignore baseline default value "1"
+			receivedPayloads = append(receivedPayloads, q)
+		}
+		mu.Unlock()
+		fmt.Fprint(w, "OK")
+	}))
+	defer ts.Close()
+
+	client := httpclient.NewClient(ts.Client())
+	m := &SQLiModule{
+		Client: client,
+		Config: SQLiModuleConfig{
+			TimeBasedDelay:   50 * time.Millisecond,
+			TimeBasedTimeout: 500 * time.Millisecond,
+			ConfirmTimeBased: false,
+		},
+	}
+
+	endpoints := []crawler.Endpoint{
+		{URL: ts.URL, Method: "GET", Params: []string{"q"}, Source: "Form"},
+	}
+
+	m.Run(context.Background(), endpoints)
+
+	// 4 error payloads + 5 time payloads = 9 distinct payloads
+	// (no dedup should block any payload since none trigger a finding)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(receivedPayloads) < 9 {
+		t.Errorf("Expected at least 9 payload requests (4 error + 5 time), got %d: %v", len(receivedPayloads), receivedPayloads)
+	}
+}
+
+func TestSQLiModule_SkipsParamlessEndpoints(t *testing.T) {
+	var requestCount int32
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requestCount, 1)
+		fmt.Fprint(w, "OK")
+	}))
+	defer ts.Close()
+
+	client := httpclient.NewClient(ts.Client())
+	m := &SQLiModule{Client: client}
+
+	endpoints := []crawler.Endpoint{
+		{URL: ts.URL + "/about", Method: "GET", Params: nil, Source: "Link"},
+		{URL: ts.URL + "/blog", Method: "GET", Params: nil, Source: "Link"},
+	}
+
+	findings, err := m.Run(context.Background(), endpoints)
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if len(findings) != 0 {
+		t.Errorf("Expected 0 findings for paramless endpoints, got %d", len(findings))
+	}
+	if atomic.LoadInt32(&requestCount) != 0 {
+		t.Errorf("Expected 0 HTTP requests for paramless endpoints, got %d", requestCount)
+	}
+}
+
+func TestSQLiModule_HeaderInjectionGated(t *testing.T) {
+	var headerProbes int32
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if any of the injection headers (except User-Agent) are present
+		for _, header := range injectionHeaders {
+			if header == "User-Agent" {
+				continue // Client sends User-Agent by default
+			}
+			if r.Header.Get(header) != "" {
+				atomic.AddInt32(&headerProbes, 1)
+				break
+			}
+		}
+		fmt.Fprint(w, "OK")
+	}))
+	defer ts.Close()
+
+	client := httpclient.NewClient(ts.Client())
+	endpoints := []crawler.Endpoint{
+		{URL: ts.URL, Method: "GET", Params: []string{"id"}, Source: "Link"},
+	}
+
+	// 1. Run with header injection disabled
+	mDisabled := &SQLiModule{
+		Client: client,
+		Config: SQLiModuleConfig{EnableHeaderInjection: false},
+	}
+	mDisabled.Run(context.Background(), endpoints)
+
+	if atomic.LoadInt32(&headerProbes) != 0 {
+		t.Errorf("Expected 0 header probes with EnableHeaderInjection=false, got %d", headerProbes)
+	}
+
+	// 2. Run with header injection enabled
+	mEnabled := &SQLiModule{
+		Client: client,
+		Config: SQLiModuleConfig{EnableHeaderInjection: true},
+	}
+	mEnabled.Run(context.Background(), endpoints)
+
+	if atomic.LoadInt32(&headerProbes) == 0 {
+		t.Errorf("Expected >0 header probes with EnableHeaderInjection=true, got 0")
+	}
+}
+
