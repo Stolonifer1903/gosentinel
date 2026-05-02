@@ -24,6 +24,10 @@ type storedXSSProbe struct {
 }
 
 // StoredXSSModule implements scanner.Module for stored XSS detection.
+//
+// When Confirm is false, Run() prompts the user on stdin before proceeding.
+// This interactive confirmation uses deadline-polling to remain responsive
+// to context cancellation without leaking goroutines.
 type StoredXSSModule struct {
 	Client  *httpclient.Client
 	Confirm bool
@@ -67,35 +71,36 @@ func (m *StoredXSSModule) Run(ctx context.Context, endpoints []crawler.Endpoint)
 func (m *StoredXSSModule) awaitConfirmation(ctx context.Context) (bool, error) {
 	fmt.Fprintf(os.Stderr, "[!] Stored XSS: this module will WRITE test data to the target. Proceed? [y/N]: ")
 
-	type result struct {
-		input string
-		err   error
-	}
-	
-	// Buffered channel prevents deadlock, but the goroutine may still be blocked 
-	// on ReadString for the lifetime of the process if ctx is canceled.
-	// In a CLI tool this is acceptable.
-	ch := make(chan result, 1)
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		// Check for cancellation before each read attempt.
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
 
-	go func() {
-		reader := bufio.NewReader(os.Stdin)
+		// Set a short deadline so ReadString unblocks periodically,
+		// letting us re-check ctx.Done() on the next iteration.
+		os.Stdin.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 		input, err := reader.ReadString('\n')
-		ch <- result{input, err}
-	}()
 
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	case res := <-ch:
-		if res.err != nil {
-			// Treating EOF as a graceful skip (rather than an error) is the correct default
-			// since it handles /dev/null stdin gracefully.
-			if res.err == io.EOF {
+		if err != nil {
+			if os.IsTimeout(err) {
+				continue // Deadline expired — loop back to check ctx
+			}
+			// EOF means stdin is closed (e.g. /dev/null, piped input).
+			// Treat as a graceful "no".
+			if err == io.EOF {
 				return false, nil
 			}
-			return false, res.err
+			return false, err
 		}
-		ans := strings.ToLower(strings.TrimSpace(res.input))
+
+		// Got a line of input — clear the deadline for future reads.
+		os.Stdin.SetReadDeadline(time.Time{})
+
+		ans := strings.ToLower(strings.TrimSpace(input))
 		if ans == "y" || ans == "yes" {
 			return true, nil
 		}
