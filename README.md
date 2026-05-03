@@ -14,12 +14,13 @@ GoSentinel is a concurrent web vulnerability scanner designed for reconnaissance
 
 | Module        | Detection Type | Details                                                                 |
 | :------------ | :------------- | :---------------------------------------------------------------------- |
-| **Headers**    | Passive        | Audits CSP, HSTS, X-Frame-Options, and other security headers with origin caching. |
-| **Sensitive**  | Passive        | Scans for AWS keys, private keys, tokens, and secrets with an improved ruleset.   |
-| **CSRF**       | Passive        | Detects missing CSRF tokens in state-changing HTML forms.                         |
-| **XSS**        | Active         | Injects payloads into parameters and forms; supports escaped reflection detection. |
-| **Stored XSS** | Active         | 2-phase canary detection for payloads persisted in databases or files.            |
-| **Leakage**    | Passive        | Identifies stack traces, debug error messages, and directory listings.            |
+| **Headers**    | Passive        | Audits CSP, HSTS, X-Frame-Options, and other security headers.          |
+| **Sensitive**  | Passive        | Scans for AWS keys, private keys, tokens, and secrets.                  |
+| **CSRF**       | Passive        | Detects missing CSRF tokens in state-changing HTML forms.               |
+| **XSS**        | Active         | Injects payloads into parameters; supports escaped reflection detection. |
+| **Stored XSS** | Active         | 2-phase canary detection for payloads persisted in databases.           |
+| **SQLi**       | Active         | Detects error-based and time-based SQL Injection vulnerabilities.       |
+| **Leakage**    | Passive        | Identifies stack traces, debug error messages, and directory listings.  |
 
 ## Quick Start
 
@@ -58,9 +59,13 @@ go build -o gosentinel .
 - `internal/report/`: HTML and JSON reporting logic.
 - `internal/httpclient/`: Shared intelligent networking layer with redirect tracking.
 
-### Web Dashboard (Experimental)
+### Web Dashboard
 
-A React + Vite based dashboard for visualizing scan datasets. Includes a comprehensive **Scan Overview**, **Attack Surface** mapping (with dedicated analysis tabs), and a **Detailed Finding Inspector**.
+A premium React + Vite dashboard for visualizing security datasets. Features include:
+- **Universal Theme Support**: Seamless switching between high-contrast Dark and Light modes.
+- **Finding Inspector**: A deep-dive modal with tabbed views (Description, Evidence, Remediation) and **intra-vulnerability navigation** to cycle through affected endpoints.
+- **Attack Surface Mapping**: Comprehensive catalog of discovered assets, endpoints, and form parameters.
+- **Scan Overview**: Real-time summary of security posture and severity distribution.
 
 To start the development server:
 
