@@ -129,13 +129,23 @@ func TestXSSModule(t *testing.T) {
 			},
 		},
 		{
-			name: "Non-form endpoint ignored",
+			// Any endpoint with params is now tested regardless of Source.
+			// The old guard (Source == "Form") was too narrow and missed GET link params.
+			name: "Non-form endpoint with params is tested",
 			endpoints: []crawler.Endpoint{
-				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "API", Params: []string{"q"}},
+				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Link", Params: []string{"q"}},
 			},
-			wantGrouped:   0,
-			wantEndpoints: 0,
-			wantFindings:  nil,
+			wantGrouped:   1,
+			wantEndpoints: 1,
+			wantFindings: []expectedFinding{
+				{
+					Title:      "Reflected Cross-Site Scripting (XSS)",
+					Severity:   scanner.High,
+					Confidence: scanner.ConfirmedConfidence,
+					Parameter:  "q",
+					Evidence:   "Parameter reflected unescaped in text/html response (HTML body breakout)",
+				},
+			},
 		},
 		{
 			name:          "Empty endpoints slice",
