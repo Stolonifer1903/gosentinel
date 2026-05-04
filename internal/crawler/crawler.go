@@ -52,9 +52,11 @@ func (s *Spider) Crawl(ctx context.Context) ([]Endpoint, error) {
 	normalizedSeed := s.resolveURL(s.BaseURL.String(), "")
 	currentLevel := []string{normalizedSeed}
 
+	seedBase, seedParams := extractQueryParams(normalizedSeed)
 	s.addEndpoint(Endpoint{
-		URL:    normalizedSeed,
+		URL:    seedBase,
 		Method: "GET",
+		Params: seedParams,
 		Source: "Seed",
 	})
 
@@ -165,10 +167,14 @@ func (s *Spider) processURL(ctx context.Context, target string) ([]string, error
 					if a.Key == "href" {
 						fullURL := s.resolveURL(resp.FinalURL, a.Val)
 						if fullURL != "" && s.isInScope(fullURL) {
-							discovered = append(discovered, fullURL)
+							// Use the base URL (no query string) as the crawl target
+							// so the visited-set deduplication is query-string-agnostic.
+							baseURL, params := extractQueryParams(fullURL)
+							discovered = append(discovered, baseURL)
 							s.addEndpoint(Endpoint{
-								URL:    fullURL,
+								URL:    baseURL,
 								Method: "GET",
+								Params: params,
 								Source: "Link",
 							})
 						}
@@ -271,4 +277,31 @@ func sortedJoin(params []string) string {
 	copy(cp, params)
 	sort.Strings(cp)
 	return strings.Join(cp, ",")
+}
+
+// extractQueryParams parses a full URL and returns:
+//   - the base URL with the query string stripped
+//   - a sorted slice of query parameter names (nil if none)
+//
+// Stripping the query string from the URL keeps the visited-set and endpoint
+// deduplication query-agnostic, while the param names are surfaced to active
+// modules so they can inject payloads into each parameter individually.
+func extractQueryParams(rawURL string) (base string, params []string) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.RawQuery == "" {
+		return rawURL, nil
+	}
+
+	query, err := url.ParseQuery(parsed.RawQuery)
+	if err != nil {
+		return rawURL, nil
+	}
+
+	for key := range query {
+		params = append(params, key)
+	}
+	sort.Strings(params)
+
+	parsed.RawQuery = ""
+	return parsed.String(), params
 }

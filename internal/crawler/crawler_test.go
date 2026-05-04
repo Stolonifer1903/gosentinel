@@ -208,25 +208,56 @@ func TestSpider_LinkExtraction(t *testing.T) {
 		t.Fatalf("Crawl failed: %v", err)
 	}
 
-	expectedURLs := map[string]bool{
-		server.URL + "/":            true, // Seed
-		server.URL + "/absolute-path": true,
-		server.URL + "/relative-path": true,
-		server.URL + "/?query=1":       true,
-		// Fragments are stripped, so "#fragment" resolves to the base URL and deduplicates
+	// Build a lookup keyed on "URL|params" so endpoints sharing the same base
+	// URL but different param sets are treated as distinct entries.
+	type epKey struct {
+		url    string
+		params string // sorted, comma-joined
 	}
-
+	endpointMap := make(map[epKey]Endpoint)
 	for _, e := range endpoints {
 		if e.Source == "Link" || e.Source == "Seed" {
-			if !expectedURLs[e.URL] {
-				t.Errorf("Unexpected URL extracted: %s", e.URL)
-			}
-			delete(expectedURLs, e.URL)
+			k := epKey{url: e.URL, params: sortedJoin(e.Params)}
+			endpointMap[k] = e
 		}
 	}
 
-	for missing := range expectedURLs {
-		t.Errorf("Expected URL not extracted: %s", missing)
+	// Plain paths should be stored verbatim with no params.
+	for _, plainURL := range []string{server.URL + "/absolute-path", server.URL + "/relative-path"} {
+		k := epKey{url: plainURL, params: ""}
+		ep, ok := endpointMap[k]
+		if !ok {
+			t.Errorf("Expected plain endpoint %q not found", plainURL)
+			continue
+		}
+		if len(ep.Params) != 0 {
+			t.Errorf("Plain link %q should have no params, got %v", plainURL, ep.Params)
+		}
+	}
+
+	// The parameterised link "?query=1" should be stored with:
+	//   URL    = base path (no query string)
+	//   Params = ["query"]
+	paramKey := epKey{url: server.URL + "/", params: "query"}
+	paramEP, ok := endpointMap[paramKey]
+	if !ok {
+		t.Fatal("Expected parameterised endpoint {URL: '/', Params: ['query']} not found")
+	}
+	expectedParams := []string{"query"}
+	if !reflect.DeepEqual(paramEP.Params, expectedParams) {
+		t.Errorf("Parameterised link: expected Params %v, got %v", expectedParams, paramEP.Params)
+	}
+
+	// No unexpected URL bases should appear.
+	allowedURLs := map[string]bool{
+		server.URL + "/":              true, // seed (no params) and "?query=1" variant both valid
+		server.URL + "/absolute-path": true,
+		server.URL + "/relative-path": true,
+	}
+	for k := range endpointMap {
+		if !allowedURLs[k.url] {
+			t.Errorf("Unexpected endpoint URL: %s", k.url)
+		}
 	}
 }
 
