@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Stolonifer1903/gosentinel/internal/crawler"
@@ -42,7 +43,8 @@ var scanCmd = &cobra.Command{
 		cyan("  • CSRF Protection  ") + dim("(Passive)") + white(" — Detects state-changing forms without tokens.\n") +
 		cyan("  • Reflected XSS    ") + dim("(Active) ") + white(" — Tests parameters for immediate reflection.\n") +
 		cyan("  • Stored XSS       ") + dim("(Active) ") + white(" — 2-phase canary detection for persisted data.\n") +
-		cyan("  • SQL Injection    ") + dim("(Active) ") + white(" — Tests for error-based and time-based SQLi.\n\n") +
+		cyan("  • SQL Injection    ") + dim("(Active) ") + white(" — Tests for error-based and time-based SQLi.\n") +
+		cyan("  • SSRF             ") + dim("(Active) ") + white(" — Tests for in-band, partial, and timing-based SSRF.\n\n") +
 		hiWhite("Usage:\n") +
 		white("  gosentinel scan --url <target> [flags]\n\n") +
 		hiWhite("Examples:\n") +
@@ -58,6 +60,7 @@ func init() {
 	scanCmd.Flags().IntP("concurrency", "c", 10, "Number of concurrent network requests")
 	scanCmd.Flags().StringP("output", "o", "", "Write results to a file (.html or .json)")
 	scanCmd.Flags().BoolP("confirm-stored-xss", "x", false, "Enable 2-phase verification of stored XSS via automated script injection")
+	scanCmd.Flags().Bool("ssrf-cloud-metadata", false, "Enable probing for AWS/GCP/Azure cloud metadata endpoints (default: false)")
 
 	// Mark --url as required so Cobra validates it before RunE is called.
 	_ = scanCmd.MarkFlagRequired("url")
@@ -74,6 +77,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	output, _ := cmd.Flags().GetString("output")
 	verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
 	confirmStored, _ := cmd.Flags().GetBool("confirm-stored-xss")
+	enableCloudMeta, _ := cmd.Flags().GetBool("ssrf-cloud-metadata")
 
 	// ── 1. Validate URL ───────────────────────────────────────────────────────
 	parsedURL, err := validateURL(target)
@@ -114,6 +118,10 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	// ── 4. Run scanner engine ─────────────────────────────────────────────────────
 	fmt.Printf("%s Running vulnerability checks…\n", cyan("[~]"))
 	sharedClient := httpclient.DefaultClient
+	
+	ssrfConfig := modules.DefaultSSRFConfig
+	ssrfConfig.EnableCloudMetadata = enableCloudMeta
+
 	activeModules := []scanner.Module{
 		&modules.HeadersModule{},
 		&modules.SensitiveModule{},
@@ -121,8 +129,50 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		&modules.XSSModule{Client: sharedClient},
 		modules.NewStoredXSSModule(sharedClient, confirmStored),
 		&modules.SQLiModule{Client: sharedClient, Config: modules.DefaultSQLiConfig},
+		&modules.SSRFModule{Client: sharedClient, Config: ssrfConfig},
 	}
 	engine := scanner.NewEngine(activeModules)
+
+	// ── Progress printer ────────────────────────────────────────────────────────
+	// Passive modules fire concurrently, so their prints must be serialised.
+	var progressMu sync.Mutex
+	engine.OnProgress = func(ev scanner.ProgressEvent) {
+		progressMu.Lock()
+		defer progressMu.Unlock()
+
+		phase := dim("passive")
+		if ev.ModuleType == scanner.TypeActive {
+			phase = dim("active ")
+		}
+
+		switch ev.Stage {
+		case scanner.StageStart:
+			fmt.Printf("   %s  %-22s  %s\n",
+				cyan("[~]"),
+				ev.ModuleName,
+				phase,
+			)
+		case scanner.StageDone:
+			elapsed := fmt.Sprintf("%dms", ev.Elapsed.Milliseconds())
+			if ev.FindCount > 0 {
+				fmt.Printf("   %s  %-22s  %s  %s  %s\n",
+					green("[✔]"),
+					ev.ModuleName,
+					phase,
+					dim(elapsed),
+					yellow(fmt.Sprintf("%d finding(s)", ev.FindCount)),
+				)
+			} else {
+				fmt.Printf("   %s  %-22s  %s  %s\n",
+					green("[✔]"),
+					ev.ModuleName,
+					phase,
+					dim(elapsed),
+				)
+			}
+		}
+	}
+
 	scanResult, err := engine.Run(cmd.Context(), endpoints)
 	if err != nil {
 		fmt.Printf(" %s Scanner failed: %v\n\n", red("[!]"), err)
