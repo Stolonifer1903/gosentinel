@@ -147,8 +147,20 @@ var DescriptionRegistry = map[CheckID]VulnerabilityDescription{
 	SSRFInternalIPDisclosure: {
 		Category: "A10:2021 - Server-Side Request Forgery",
 		What:     "A Server-Side Request Forgery (SSRF) payload pointing to an internal IP address was sent, and internal network content was returned in the response.",
-		Why:      "SSRF allows attackers to trick the server into making requests to internal systems, accessing private networks, cloud endpoints (169.254.169.254), or launching attacks from within the trusted network.",
-		Impact:   "Attackers can access internal services, steal cloud credentials (AWS metadata), reach databases on private networks, or use the server as a proxy to attack internal infrastructure.",
+		Why:      "SSRF allows attackers to trick the server into making requests to internal systems, accessing private networks, or launching attacks from within the trusted network.",
+		Impact:   "Attackers can access internal services, reach databases on private networks, or use the server as a proxy to attack internal infrastructure.",
+	},
+	SSRFCloudMetadata: {
+		Category: "A10:2021 - Server-Side Request Forgery",
+		What:     "An SSRF payload pointing to a cloud provider's metadata endpoint (e.g., 169.254.169.254) resulted in the server returning cloud metadata content.",
+		Why:      "Cloud providers use a local, unauthenticated IP address to serve instance metadata. If a server is vulnerable to SSRF, an attacker can request this endpoint to retrieve highly sensitive information.",
+		Impact:   "Critical risk of full cloud infrastructure compromise. Attackers can extract temporary IAM credentials, environment variables, or startup scripts.",
+	},
+	SSRFPartialBlind: {
+		Category: "A10:2021 - Server-Side Request Forgery",
+		What:     "An SSRF payload caused a detectable change in the server's response behavior (e.g., status code differences or significant timing delays) compared to a baseline request.",
+		Why:      "Even if the server does not directly return the fetched internal content, variations in its responses can indicate that the server successfully initiated a request to the provided internal IP or blocked port.",
+		Impact:   "Attackers can perform internal port scanning and map out the internal network structure, which can be leveraged for further attacks.",
 	},
 
 	// ============================================================================

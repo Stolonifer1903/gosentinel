@@ -44,6 +44,8 @@ const (
 // SSRF-related check IDs
 const (
 	SSRFInternalIPDisclosure CheckID = "SSRF_INTERNAL_IP_DISCLOSURE"
+	SSRFCloudMetadata        CheckID = "SSRF_CLOUD_METADATA"
+	SSRFPartialBlind         CheckID = "SSRF_PARTIAL_BLIND"
 )
 
 // IDOR-related check IDs
