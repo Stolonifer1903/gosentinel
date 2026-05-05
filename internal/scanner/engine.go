@@ -4,14 +4,37 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/Stolonifer1903/gosentinel/internal/crawler"
 )
 
+// ProgressStage indicates whether a module is starting or has finished.
+type ProgressStage string
+
+const (
+	StageStart ProgressStage = "start"
+	StageDone  ProgressStage = "done"
+)
+
+// ProgressEvent is emitted by the engine before and after each module runs.
+type ProgressEvent struct {
+	ModuleName string
+	ModuleType ModuleType
+	Stage      ProgressStage
+	Elapsed    time.Duration // only meaningful when Stage == StageDone
+	FindCount  int           // only meaningful when Stage == StageDone
+}
+
+// ProgressFunc is called synchronously by the engine on each module lifecycle event.
+// Implementations must be goroutine-safe when passive modules run concurrently.
+type ProgressFunc func(ProgressEvent)
+
 // Engine orchestrates all registered scanner modules, running passive modules
 // concurrently and active modules sequentially to prevent data races.
 type Engine struct {
-	modules []Module
+	modules    []Module
+	OnProgress ProgressFunc // optional; called before and after each module run
 }
 
 // NewEngine creates an Engine mapped with the provided modules.
@@ -67,6 +90,9 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 		wg.Add(1)
 		go func(m Module) {
 			defer wg.Done()
+			start := time.Now()
+			e.emit(ProgressEvent{ModuleName: m.Name(), ModuleType: TypePassive, Stage: StageStart})
+
 			findings, err := m.Run(ctx, endpoints)
 
 			mu.Lock()
@@ -79,6 +105,14 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 				Error:      err,
 			})
 			mu.Unlock()
+
+			e.emit(ProgressEvent{
+				ModuleName: m.Name(),
+				ModuleType: TypePassive,
+				Stage:      StageDone,
+				Elapsed:    time.Since(start),
+				FindCount:  len(findings),
+			})
 		}(mod)
 	}
 	wg.Wait()
@@ -94,6 +128,9 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 		default:
 		}
 
+		start := time.Now()
+		e.emit(ProgressEvent{ModuleName: mod.Name(), ModuleType: TypeActive, Stage: StageStart})
+
 		findings, err := mod.Run(ctx, endpoints)
 
 		if findings != nil {
@@ -103,6 +140,13 @@ func (e *Engine) Run(ctx context.Context, endpoints []crawler.Endpoint) (*Result
 			ModuleName: mod.Name(),
 			Findings:   findings,
 			Error:      err,
+		})
+		e.emit(ProgressEvent{
+			ModuleName: mod.Name(),
+			ModuleType: TypeActive,
+			Stage:      StageDone,
+			Elapsed:    time.Since(start),
+			FindCount:  len(findings),
 		})
 	}
 
@@ -188,4 +232,13 @@ func stripTrailingSlash(url string) string {
 		return url[:len(url)-1]
 	}
 	return url
+}
+
+// emit fires a progress event if OnProgress is set.
+// Safe to call from goroutines — the nil check is a read of an immutable field set
+// before Run() is called, so no synchronization is needed here.
+func (e *Engine) emit(ev ProgressEvent) {
+	if e.OnProgress != nil {
+		e.OnProgress(ev)
+	}
 }
