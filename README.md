@@ -4,23 +4,25 @@ GoSentinel is a concurrent web vulnerability scanner designed for reconnaissance
 
 ## Core Functionality
 
-- **Concurrent BFS Crawler**: A thread-safe spider that recursively discovers links and forms while enforcing strict host-scoped protection. Now includes improved URL resolution, context propagation, and centralized HTTP client management.
-- **Phased Scanner Engine**: Orchestrates modules using a two-phase execution strategy: **Passive** modules run concurrently for speed, while **Active** modules run sequentially to prevent data races and ensure target state integrity.
-- **Attack Surface Mapping**: Automatically catalog discovered endpoints, forms, and technical assets during the reconnaissance phase.
-- **Confidence-Aware Aggregation**: Automatically groups identical findings across multiple endpoints. Promotes findings based on **Confidence Levels** (Certain, Firm, Tentative) and deduplicates based on normalized URLs.
-- **Multi-format Reporting**: Generates scannable, dark-mode HTML dashboards and structured JSON output for CI/CD integration.
+- **Concurrent BFS Crawler**: A high-performance, thread-safe spider that recursively maps the target attack surface. It intelligently parses DOMs for links and forms, extracts query parameters, normalizes URLs, and strictly enforces scope boundaries while handling HTTP redirects efficiently.
+- **Phased Scanner Engine**: Orchestrates modules using a highly efficient two-phase execution strategy:
+  - **Passive Phase**: Modules that analyze responses safely (without mutation) run concurrently, maximizing throughput.
+  - **Active Phase**: Modules that inject malicious payloads run sequentially to prevent data races, maintain target state integrity, and minimize aggressive traffic bursts.
+- **Attack Surface Mapping**: Automatically catalogs all discovered endpoints, form fields, and URL query parameters during the reconnaissance phase, exposing them systematically to active modules.
+- **Intelligent Deduplication & Grouping**: Automatically groups identical findings across multiple endpoints. It promotes findings based on **Confidence Levels** (Certain, Firm, Tentative) and deduplicates based on normalized URLs and parameter structures.
+- **Multi-format Reporting**: Outputs results dynamically via CLI progress hooks, generating structured JSON for CI/CD integrations or an interactive, dark-mode-enabled HTML dashboard for visual analysis.
 
 ## Security Modules
 
-| Module        | Detection Type | Details                                                                 |
-| :------------ | :------------- | :---------------------------------------------------------------------- |
-| **Headers**    | Passive        | Audits CSP, HSTS, X-Frame-Options, and other security headers.          |
-| **Sensitive**  | Passive        | Scans for AWS keys, private keys, tokens, and secrets.                  |
-| **CSRF**       | Passive        | Detects missing CSRF tokens in state-changing HTML forms.               |
-| **XSS**        | Active         | Injects payloads into parameters; supports escaped reflection detection. |
-| **Stored XSS** | Active         | 2-phase canary detection for payloads persisted in databases.           |
-| **SQLi**       | Active         | Detects error-based and time-based SQL Injection vulnerabilities.       |
-| **Leakage**    | Passive        | Identifies stack traces, debug error messages, and directory listings.  |
+| Module         | Type    | Details                                                                                                                                           |
+| :------------- | :------ | :------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Headers**    | Passive | Audits HTTP responses for missing or misconfigured security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options).                         |
+| **Sensitive**  | Passive | Uses high-confidence regex patterns to detect exposed AWS keys, private PEM keys, GitHub tokens, stack traces, and enabled directory indexing.    |
+| **CSRF**       | Passive | Detects missing or weak CSRF tokens in state-changing HTML forms (e.g., POST, PUT, DELETE operations).                                            |
+| **Reflected XSS**| Active  | Injects safe polyglot payloads into URL parameters and form fields, evaluating the DOM to detect unescaped HTML body breakouts.                   |
+| **Stored XSS** | Active  | Employs a 2-phase canary injection mechanism to detect persistent XSS. Safely prompts for user confirmation before writing data to target routes. |
+| **SQLi**       | Active  | Detects SQL Injection via error-based heuristics and time-based (blind) payload delays, validating against dynamic baseline response profiles.    |
+| **SSRF**       | Active  | Tests parameters for Server-Side Request Forgery using in-band reflection, cloud metadata endpoints, and partial-blind port scanning heuristics.  |
 
 ## Quick Start
 
@@ -47,17 +49,18 @@ go build -o gosentinel .
 - `--concurrency`: Number of concurrent workers (default 10).
 - `--output`: Path to save the HTML or JSON report.
 - `--confirm-stored-xss`: Enable 2-phase verification of stored XSS via automated script injection.
+- `--ssrf-cloud-metadata`: Enable probing for AWS/GCP/Azure cloud metadata endpoints.
 - `-v, --verbose`: Show detailed URLs and technical evidence in terminal output.
 
 ## Developer Guide
 
 ### Project Architecture
 
-- `cmd/`: CLI interface and command definitions (Cobra).
-- `internal/scanner/`: Core orchestration logic, finding models, and module registry.
-- `internal/crawler/`: High-performance BFS spider and reconnaissance logic.
+- `cmd/`: CLI interface, progress rendering, and command definitions (Cobra).
+- `internal/scanner/`: Core orchestration logic, finding models, module registry, and descriptions.
+- `internal/crawler/`: High-performance BFS spider, DOM parsing, and reconnaissance logic.
 - `internal/report/`: HTML and JSON reporting logic.
-- `internal/httpclient/`: Shared intelligent networking layer with redirect tracking.
+- `internal/httpclient/`: Shared intelligent networking layer with timeout and redirect tracking.
 
 ### Web Dashboard
 
