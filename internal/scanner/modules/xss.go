@@ -93,6 +93,9 @@ func (m *XSSModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]sc
 	seen := make(map[string]struct{})
 
 	for _, ep := range endpoints {
+		if ep.IsDestructive {
+			continue
+		}
 		if len(ep.Params) == 0 {
 			continue
 		}

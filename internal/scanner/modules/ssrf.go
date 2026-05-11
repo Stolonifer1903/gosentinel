@@ -117,6 +117,9 @@ func (m *SSRFModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]s
 	seen := make(map[string]struct{})
 
 	for _, ep := range endpoints {
+		if ep.IsDestructive {
+			continue
+		}
 		select {
 		case <-ctx.Done():
 			return findings, ctx.Err()

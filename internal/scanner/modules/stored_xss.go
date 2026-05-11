@@ -113,6 +113,10 @@ func (m *StoredXSSModule) injectPhase(ctx context.Context, endpoints []crawler.E
 	canaryIndex := make(map[string]storedXSSProbe)
 
 	for _, ep := range endpoints {
+		if ep.IsDestructive {
+			continue
+		}
+
 		// Check for cancellation at every endpoint boundary, even if the endpoint
 		// has no injectable params, so we don't block on large link-only endpoint lists.
 		select {
@@ -166,6 +170,9 @@ func (m *StoredXSSModule) sweepPhase(ctx context.Context, endpoints []crawler.En
 	seen := make(map[string]struct{})
 
 	for _, ep := range endpoints {
+		if ep.IsDestructive {
+			continue
+		}
 		select {
 		case <-ctx.Done():
 			return findings, ctx.Err()

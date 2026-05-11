@@ -82,7 +82,8 @@ func (m *SensitiveModule) Run(ctx context.Context, endpoints []crawler.Endpoint)
 	for _, ep := range endpoints {
 		// Only check GET endpoints for passive body scanning to avoid side effects.
 		// Also deduplicate to avoid scanning the same page multiple times.
-		if ep.Method != "GET" || checkedURLs[ep.URL] {
+		// Skip destructive endpoints to prevent accidental session loss.
+		if ep.Method != "GET" || checkedURLs[ep.URL] || ep.IsDestructive {
 			continue
 		}
 
