@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"net/url"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -11,12 +13,23 @@ import (
 
 	"github.com/Stolonifer1903/gosentinel/internal/crawler"
 	"github.com/Stolonifer1903/gosentinel/internal/httpclient"
+	"github.com/Stolonifer1903/gosentinel/internal/logger"
 	"github.com/Stolonifer1903/gosentinel/internal/report"
 	"github.com/Stolonifer1903/gosentinel/internal/scanner"
 	"github.com/Stolonifer1903/gosentinel/internal/scanner/modules"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
+
+var out io.Writer = os.Stdout
+
+func printf(format string, a ...interface{}) {
+	fmt.Fprintf(out, format, a...)
+}
+
+func println(a ...interface{}) {
+	fmt.Fprintln(out, a...)
+}
 
 // ── colour helpers ────────────────────────────────────────────────────────────
 
@@ -50,7 +63,9 @@ var scanCmd = &cobra.Command{
 		hiWhite("Examples:\n") +
 		white("  gosentinel scan --url https://example.com\n") +
 		white("  gosentinel scan --url https://example.com --depth 3 -o report.html\n") +
-		white("  gosentinel scan --url https://example.com --confirm-stored-xss\n"),
+		white("  gosentinel scan --url https://example.com --confirm-stored-xss\n") +
+		white("  gosentinel scan --url https://example.com --cookie \"PHPSESSID=abc123\"\n") +
+		white("  gosentinel scan --url https://example.com -H \"Authorization: Bearer token\"\n"),
 	RunE: runScan,
 }
 
@@ -61,6 +76,9 @@ func init() {
 	scanCmd.Flags().StringP("output", "o", "", "Write results to a file (.html or .json)")
 	scanCmd.Flags().BoolP("confirm-stored-xss", "x", false, "Enable 2-phase verification of stored XSS via automated script injection")
 	scanCmd.Flags().Bool("ssrf-cloud-metadata", false, "Enable probing for AWS/GCP/Azure cloud metadata endpoints (default: false)")
+	scanCmd.Flags().StringP("cookie", "b", "", `Cookies to attach to all requests (e.g. "session=abc123; token=xyz")`)
+	scanCmd.Flags().StringArrayP("header", "H", nil, `Custom header to attach to all requests (repeatable, e.g. -H "Authorization: Bearer token")`)
+	scanCmd.Flags().Bool("log", false, "Enable session logging to a local file")
 
 	// Mark --url as required so Cobra validates it before RunE is called.
 	_ = scanCmd.MarkFlagRequired("url")
@@ -78,6 +96,18 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
 	confirmStored, _ := cmd.Flags().GetBool("confirm-stored-xss")
 	enableCloudMeta, _ := cmd.Flags().GetBool("ssrf-cloud-metadata")
+	cookieStr, _ := cmd.Flags().GetString("cookie")
+	customHeaders, _ := cmd.Flags().GetStringArray("header")
+	enableLog, _ := cmd.Flags().GetBool("log")
+
+	if enableLog {
+		session, err := logger.StartSession()
+		if err != nil {
+			return fmt.Errorf("failed to start logging session: %w", err)
+		}
+		defer session.Close()
+		out = session.Writer()
+	}
 
 	// ── 1. Validate URL ───────────────────────────────────────────────────────
 	parsedURL, err := validateURL(target)
@@ -85,12 +115,35 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	printScanHeader(parsedURL.String(), depth)
+	// ── 2. Build auth headers ────────────────────────────────────────────────
+	defaultHeaders := make(map[string]string)
+	if cookieStr != "" {
+		if warning := validateCookie(cookieStr); warning != "" {
+			printf(" %s %s\n", yellow("[!]"), warning)
+		}
+		defaultHeaders["Cookie"] = cookieStr
+	}
+	for _, h := range customHeaders {
+		parts := strings.SplitN(h, ":", 2)
+		if len(parts) == 2 {
+			defaultHeaders[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+		} else {
+			printf(" %s Ignoring malformed header %q (expected \"Key: Value\")\n", yellow("[!]"), h)
+		}
+	}
+
+	// Create an auth-aware client and update the global default so the crawler
+	// and FetchHeaders also send auth headers automatically.
+	sharedClient := httpclient.NewClientWithAuth(httpclient.DefaultClient.HTTPClient(), defaultHeaders)
+	httpclient.SetDefaultClient(sharedClient)
+
+	authMode := describeAuthMode(defaultHeaders)
+	printScanHeader(parsedURL.String(), depth, authMode)
 
 	// ── 2. Fetch headers ──────────────────────────────────────────────────────
-	fmt.Printf("\n%s Fetching response headers…\n\n", cyan("[~]"))
+	printf("\n%s Fetching response headers…\n\n", cyan("[~]"))
 
-	httpResult, err := httpclient.FetchHeaders(parsedURL.String())
+	httpResult, err := httpclient.FetchHeadersWithContext(cmd.Context(), parsedURL.String())
 	if err != nil {
 		return fmt.Errorf("could not reach target: %w", err)
 	}
@@ -99,7 +152,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	printHeaders(httpResult, verbose)
 
 	// ── 3. Spidering ──────────────────────────────────────────────────────────
-	fmt.Printf("%s Spidering target (depth %d, concurrency %d)…\n", cyan("[~]"), depth, concurrency)
+	printf("%s Spidering target (depth %d, concurrency %d)…\n", cyan("[~]"), depth, concurrency)
 	spider, err := crawler.NewSpider(parsedURL.String(), depth, concurrency)
 	if err != nil {
 		return fmt.Errorf("initializing spider: %w", err)
@@ -107,18 +160,17 @@ func runScan(cmd *cobra.Command, _ []string) error {
 
 	endpoints, err := spider.Crawl(cmd.Context())
 	if err != nil {
-		fmt.Printf(" %s Spidering failed: %v\n\n", red("[!]"), err)
+		printf(" %s Spidering failed: %v\n\n", red("[!]"), err)
 	} else {
-		fmt.Printf(" %s Discovered %d endpoints\n\n", green("[✔]"), len(endpoints))
+		printf(" %s Discovered %d endpoints\n\n", green("[✔]"), len(endpoints))
 		if len(endpoints) > 0 {
 			printEndpoints(endpoints, verbose)
 		}
 	}
 
 	// ── 4. Run scanner engine ─────────────────────────────────────────────────────
-	fmt.Printf("%s Running vulnerability checks…\n", cyan("[~]"))
-	sharedClient := httpclient.DefaultClient
-	
+	printf("%s Running vulnerability checks…\n", cyan("[~]"))
+
 	ssrfConfig := modules.DefaultSSRFConfig
 	ssrfConfig.EnableCloudMetadata = enableCloudMeta
 
@@ -147,7 +199,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 
 		switch ev.Stage {
 		case scanner.StageStart:
-			fmt.Printf("   %s  %-22s  %s\n",
+			printf("   %s  %-22s  %s\n",
 				cyan("[~]"),
 				ev.ModuleName,
 				phase,
@@ -155,7 +207,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		case scanner.StageDone:
 			elapsed := fmt.Sprintf("%dms", ev.Elapsed.Milliseconds())
 			if ev.FindCount > 0 {
-				fmt.Printf("   %s  %-22s  %s  %s  %s\n",
+				printf("   %s  %-22s  %s  %s  %s\n",
 					green("[✔]"),
 					ev.ModuleName,
 					phase,
@@ -163,7 +215,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 					yellow(fmt.Sprintf("%d finding(s)", ev.FindCount)),
 				)
 			} else {
-				fmt.Printf("   %s  %-22s  %s  %s\n",
+				printf("   %s  %-22s  %s  %s\n",
 					green("[✔]"),
 					ev.ModuleName,
 					phase,
@@ -175,24 +227,24 @@ func runScan(cmd *cobra.Command, _ []string) error {
 
 	scanResult, err := engine.Run(cmd.Context(), endpoints)
 	if err != nil {
-		fmt.Printf(" %s Scanner failed: %v\n\n", red("[!]"), err)
+		printf(" %s Scanner failed: %v\n\n", red("[!]"), err)
 	} else {
 		groupedFindings := scanResult.Group()
-		fmt.Printf(" %s %d unique finding(s) detected (%d instances)\n\n",
+		printf(" %s %d unique finding(s) detected (%d instances)\n\n",
 			green("[✔]"), len(groupedFindings), len(scanResult.Findings))
 
 		var hasErrors bool
 		for _, mr := range scanResult.ModuleResults {
 			if mr.Error != nil {
 				if !hasErrors {
-					fmt.Printf("%s\n", hiWhite("  ┌─ Module Errors "))
+					printf("%s\n", hiWhite("  ┌─ Module Errors "))
 					hasErrors = true
 				}
-				fmt.Printf("  %s %s: %s\n", red("│"), cyan(mr.ModuleName), mr.Error.Error())
+				printf("  %s %s: %s\n", red("│"), cyan(mr.ModuleName), mr.Error.Error())
 			}
 		}
 		if hasErrors {
-			fmt.Printf("%s\n\n", hiWhite("  └─"))
+			printf("%s\n\n", hiWhite("  └─"))
 		}
 
 		if len(groupedFindings) > 0 {
@@ -212,7 +264,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("writing report: %w", err)
 		}
 	} else if output != "" {
-		fmt.Printf(" %s Skipping report — scanner did not produce results.\n\n", yellow("[!]"))
+		printf(" %s Skipping report — scanner did not produce results.\n\n", yellow("[!]"))
 	}
 
 	return nil
@@ -236,13 +288,16 @@ func validateURL(raw string) (*url.URL, error) {
 	return parsed, nil
 }
 
-func printScanHeader(target string, depth int) {
+func printScanHeader(target string, depth int, authMode string) {
 	line := strings.Repeat("─", 60)
-	fmt.Println(cyan(line))
-	fmt.Printf(" %s  %s\n", hiWhite("Target:"), green(target))
-	fmt.Printf(" %s   %s\n", hiWhite("Depth:"), yellow("%d", depth))
-	fmt.Printf(" %s %s\n", hiWhite("Started:"), dim(time.Now().Format("2006-01-02 15:04:05")))
-	fmt.Println(cyan(line))
+	println(cyan(line))
+	printf(" %s  %s\n", hiWhite("Target:"), green(target))
+	printf(" %s   %s\n", hiWhite("Depth:"), yellow("%d", depth))
+	if authMode != "" {
+		printf(" %s    %s\n", hiWhite("Auth:"), dim(authMode))
+	}
+	printf(" %s %s\n", hiWhite("Started:"), dim(time.Now().Format("2006-01-02 15:04:05")))
+	println(cyan(line))
 }
 
 func printStatusLine(r *httpclient.HeaderResult) {
@@ -256,7 +311,7 @@ func printStatusLine(r *httpclient.HeaderResult) {
 		statusColor = color.New(color.FgMagenta, color.Bold).SprintfFunc()
 	}
 
-	fmt.Printf(" %s %s   %s %s\n\n",
+	printf(" %s %s   %s %s\n\n",
 		hiWhite("Status:"), statusColor("%s", r.Status),
 		hiWhite("Time:"), dim("%.0fms", float64(r.Duration.Microseconds())/1000),
 	)
@@ -271,7 +326,7 @@ func printHeaders(r *httpclient.HeaderResult, verbose bool) {
 	}
 	sort.Strings(names)
 
-	fmt.Printf("%s\n", hiWhite("  ┌─ Response Headers "))
+	printf("%s\n", hiWhite("  ┌─ Response Headers "))
 	for _, name := range names {
 		values := strings.Join(r.Headers[name], "; ")
 
@@ -280,10 +335,10 @@ func printHeaders(r *httpclient.HeaderResult, verbose bool) {
 			values = values[:77] + "…"
 		}
 
-		fmt.Printf("  %s %-36s %s\n",
+		printf("  %s %-36s %s\n",
 			dim("│"), cyan("%-36s", name), white(values))
 	}
-	fmt.Printf("%s\n\n", hiWhite("  └─"))
+	printf("%s\n\n", hiWhite("  └─"))
 }
 
 // writeReport dispatches to the right renderer based on the file extension.
@@ -328,7 +383,7 @@ func writeReport(outPath, target string, r *httpclient.HeaderResult, findings []
 	}
 
 	abs, _ := filepath.Abs(finalPath)
-	fmt.Printf(" %s Report saved → %s\n\n", green("[✔]"), cyan(abs))
+	printf(" %s Report saved → %s\n\n", green("[✔]"), cyan(abs))
 	return nil
 }
 
@@ -342,7 +397,7 @@ func printFindings(findings []scanner.GroupedFinding, verbose bool) {
 		scanner.Info:     dim,
 	}
 
-	fmt.Printf("%s\n", hiWhite("  ┌─ Findings Summary "))
+	printf("%s\n", hiWhite("  ┌─ Findings Summary "))
 	for _, f := range findings {
 		sevFn, ok := severityColor[f.Severity]
 		if !ok {
@@ -354,25 +409,25 @@ func printFindings(findings []scanner.GroupedFinding, verbose bool) {
 			countSuffix = dim(" (%d endpoints)", len(f.Endpoints))
 		}
 
-		fmt.Printf("  %s %s %s%s\n",
+		printf("  %s %s %s%s\n",
 			sevFn("│"), sevFn("%-10s", string(f.Severity)), white("%s", f.Title), countSuffix)
-		fmt.Printf("  %s         %s\n", dim("│"), dim("%s", f.OWASP))
+		printf("  %s         %s\n", dim("│"), dim("%s", f.OWASP))
 
 		if verbose {
 			for _, u := range f.Endpoints {
 				if u.Detail != "" {
-					fmt.Printf("  %s           %s %s\n", dim("│"), dim("→ %s", u.URL), dim("[%s]", u.Detail))
+					printf("  %s           %s %s\n", dim("│"), dim("→ %s", u.URL), dim("[%s]", u.Detail))
 				} else {
-					fmt.Printf("  %s           %s\n", dim("│"), dim("→ %s", u.URL))
+					printf("  %s           %s\n", dim("│"), dim("→ %s", u.URL))
 				}
 			}
 		}
 	}
-	fmt.Printf("%s\n\n", hiWhite("  └─"))
+	printf("%s\n\n", hiWhite("  └─"))
 }
 
 func printEndpoints(endpoints []crawler.Endpoint, verbose bool) {
-	fmt.Printf("%s\n", hiWhite("  ┌─ Discovered Attack Surface "))
+	printf("%s\n", hiWhite("  ┌─ Discovered Attack Surface "))
 
 	for _, e := range endpoints {
 		methodColor := green
@@ -393,8 +448,53 @@ func printEndpoints(endpoints []crawler.Endpoint, verbose bool) {
 			displayURL = displayURL[:77] + "…"
 		}
 
-		fmt.Printf("  %s %-6s %s%s\n",
+		printf("  %s %-6s %s%s\n",
 			cyan("│"), methodColor("%s", e.Method), white("%s", displayURL), paramsOutput)
 	}
-	fmt.Printf("%s\n\n", hiWhite("  └─"))
+	printf("%s\n\n", hiWhite("  └─"))
+}
+
+// validateCookie checks that a raw cookie string contains at least one valid
+// key=value pair. Returns a warning message if the format looks wrong, or ""
+// if it looks acceptable. The scan still proceeds — this is a best-effort guard.
+func validateCookie(raw string) string {
+	parts := strings.Split(raw, ";")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if !strings.Contains(part, "=") {
+			return fmt.Sprintf("Cookie fragment %q has no '=' separator — the server may ignore it. "+
+				"Expected format: \"name=value; name2=value2\"", part)
+		}
+	}
+	return ""
+}
+
+// describeAuthMode returns a human-readable summary of the auth configuration
+// for display in the scan header. Returns "" when no auth is configured.
+func describeAuthMode(headers map[string]string) string {
+	if len(headers) == 0 {
+		return ""
+	}
+
+	var parts []string
+	if _, ok := headers["Cookie"]; ok {
+		parts = append(parts, "Cookie")
+	}
+
+	customCount := 0
+	for key := range headers {
+		if key != "Cookie" {
+			customCount++
+		}
+	}
+	if customCount == 1 {
+		parts = append(parts, "1 custom header")
+	} else if customCount > 1 {
+		parts = append(parts, fmt.Sprintf("%d custom headers", customCount))
+	}
+
+	return strings.Join(parts, " + ")
 }
