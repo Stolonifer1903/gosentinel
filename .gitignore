@@ -21,3 +21,6 @@ reports/
 # Project documentation
 PROJECT_PLAN.txt
 SCANNER_ENGINE.md
+
+# Session logs
+logs/
