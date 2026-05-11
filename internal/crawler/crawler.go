@@ -15,10 +15,11 @@ import (
 
 // Endpoint represents a discovered web resource or form.
 type Endpoint struct {
-	URL    string
-	Method string
-	Params []string
-	Source string // "Link", "Form"
+	URL           string
+	Method        string
+	Params        []string
+	Source        string // "Link", "Form"
+	IsDestructive bool   // true if the path is known to destroy session state
 }
 
 // Spider manages the crawling process.
@@ -28,6 +29,7 @@ type Spider struct {
 	Visited     map[string]bool
 	mu          sync.Mutex
 	Endpoints   []Endpoint
+	endpointIdx map[string]int
 	endpointsMu sync.Mutex
 	Sem         chan struct{} // Concurrency semaphore
 }
@@ -40,11 +42,43 @@ func NewSpider(targetURL string, maxDepth int, concurrency int) (*Spider, error)
 	}
 
 	return &Spider{
-		BaseURL:  parsed,
-		MaxDepth: maxDepth,
-		Visited:  make(map[string]bool),
-		Sem:      make(chan struct{}, concurrency),
+		BaseURL:     parsed,
+		MaxDepth:    maxDepth,
+		Visited:     make(map[string]bool),
+		endpointIdx: make(map[string]int),
+		Sem:         make(chan struct{}, concurrency),
 	}, nil
+}
+
+// destructivePaths contains path patterns that are known to destroy server-side
+// session state. URLs matching these are discovered but never crawled.
+var destructivePaths = []string{
+	"/logout", "/logout.php", "/signout", "/sign-out",
+	"/log-out", "/logoff", "/logoff.php", "/setup.php",
+}
+
+func isDestructivePath(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	p := strings.ToLower(parsed.Path)
+	for _, blocked := range destructivePaths {
+		if p == blocked || strings.HasSuffix(p, blocked) {
+			return true
+		}
+	}
+	return false
+}
+
+// normaliseEndpointKey returns a canonical key for deduplication.
+// Trailing slashes are stripped (unless it's the root path) so "/path/" and "/path" are the same endpoint.
+func normaliseEndpointKey(rawURL, method string) string {
+	u := rawURL
+	if parsed, err := url.Parse(rawURL); err == nil && parsed.Path != "/" && strings.HasSuffix(u, "/") {
+		u = u[:len(u)-1]
+	}
+	return strings.ToLower(u) + "|" + strings.ToUpper(method)
 }
 
 // Crawl starts the BFS crawling process.
@@ -123,17 +157,30 @@ func (s *Spider) addEndpoint(e Endpoint) {
 	if e.URL == "" {
 		return
 	}
+
+	// Normalise trailing slash on stored URL.
+	if parsed, err := url.Parse(e.URL); err == nil && parsed.Path != "/" && strings.HasSuffix(e.URL, "/") {
+		e.URL = e.URL[:len(e.URL)-1]
+	}
+	key := normaliseEndpointKey(e.URL, e.Method)
+
 	s.endpointsMu.Lock()
 	defer s.endpointsMu.Unlock()
 
-	// Avoid duplicates in results. Params are compared in sorted order so that
-	// two endpoints with the same URL, method, and parameter set are treated as
-	// identical regardless of the order in which params were discovered.
-	for _, existing := range s.Endpoints {
-		if existing.URL == e.URL && existing.Method == e.Method && sortedJoin(existing.Params) == sortedJoin(e.Params) {
-			return
+	if idx, exists := s.endpointIdx[key]; exists {
+		existing := &s.Endpoints[idx]
+		// Upgrade: prefer the entry with more params (Form > Link).
+		if len(e.Params) > len(existing.Params) {
+			existing.Params = e.Params
+			existing.Source = e.Source
 		}
+		// Ensure destructive flag is persistent
+		if e.IsDestructive {
+			existing.IsDestructive = true
+		}
+		return
 	}
+	s.endpointIdx[key] = len(s.Endpoints)
 	s.Endpoints = append(s.Endpoints, e)
 }
 
@@ -170,12 +217,16 @@ func (s *Spider) processURL(ctx context.Context, target string) ([]string, error
 							// Use the base URL (no query string) as the crawl target
 							// so the visited-set deduplication is query-string-agnostic.
 							baseURL, params := extractQueryParams(fullURL)
-							discovered = append(discovered, baseURL)
+							isDestructive := isDestructivePath(baseURL)
+							if !isDestructive {
+								discovered = append(discovered, baseURL)
+							}
 							s.addEndpoint(Endpoint{
-								URL:    baseURL,
-								Method: "GET",
-								Params: params,
-								Source: "Link",
+								URL:           baseURL,
+								Method:        "GET",
+								Params:        params,
+								Source:        "Link",
+								IsDestructive: isDestructive,
 							})
 						}
 					}
@@ -258,11 +309,13 @@ func (s *Spider) parseForm(baseURL string, n *html.Node) Endpoint {
 		return Endpoint{}
 	}
 
+	actionBase, _ := extractQueryParams(resolvedAction)
 	return Endpoint{
-		URL:    resolvedAction,
-		Method: method,
-		Params: params,
-		Source: "Form",
+		URL:           resolvedAction,
+		Method:        method,
+		Params:        params,
+		Source:        "Form",
+		IsDestructive: isDestructivePath(actionBase),
 	}
 }
 

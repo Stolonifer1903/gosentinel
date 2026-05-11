@@ -295,3 +295,142 @@ func TestSpider_ScopeSecurity(t *testing.T) {
 		}
 	}
 }
+
+func TestAddEndpoint_MergesLinkAndForm(t *testing.T) {
+	s, _ := NewSpider("http://example.com", 0, 10)
+	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Link", Params: nil})
+	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Form", Params: []string{"q", "page"}})
+
+	if len(s.Endpoints) != 1 {
+		t.Fatalf("Expected 1 endpoint, got %d", len(s.Endpoints))
+	}
+	ep := s.Endpoints[0]
+	if ep.Source != "Form" {
+		t.Errorf("Expected source Form, got %s", ep.Source)
+	}
+	expectedParams := []string{"q", "page"}
+	if !reflect.DeepEqual(ep.Params, expectedParams) {
+		t.Errorf("Expected params %v, got %v", expectedParams, ep.Params)
+	}
+}
+
+func TestAddEndpoint_TrailingSlashNormalisation(t *testing.T) {
+	s, _ := NewSpider("http://example.com", 0, 10)
+	s.addEndpoint(Endpoint{URL: "http://example.com/vuln", Method: "GET", Source: "Link", Params: nil})
+	s.addEndpoint(Endpoint{URL: "http://example.com/vuln/", Method: "GET", Source: "Form", Params: []string{"id"}})
+
+	if len(s.Endpoints) != 1 {
+		t.Fatalf("Expected 1 endpoint after slash normalisation, got %d", len(s.Endpoints))
+	}
+	ep := s.Endpoints[0]
+	if ep.URL != "http://example.com/vuln" {
+		t.Errorf("Expected URL to have no trailing slash, got %s", ep.URL)
+	}
+	expectedParams := []string{"id"}
+	if !reflect.DeepEqual(ep.Params, expectedParams) {
+		t.Errorf("Expected params %v, got %v", expectedParams, ep.Params)
+	}
+}
+
+func TestAddEndpoint_DifferentMethodsAreDistinct(t *testing.T) {
+	s, _ := NewSpider("http://example.com", 0, 10)
+	s.addEndpoint(Endpoint{URL: "http://example.com/upload", Method: "GET", Source: "Link", Params: nil})
+	s.addEndpoint(Endpoint{URL: "http://example.com/upload", Method: "POST", Source: "Form", Params: []string{"file"}})
+
+	if len(s.Endpoints) != 2 {
+		t.Fatalf("Expected 2 endpoints (distinct methods), got %d", len(s.Endpoints))
+	}
+}
+
+func TestAddEndpoint_RicherLinkNotDowngradedByForm(t *testing.T) {
+	s, _ := NewSpider("http://example.com", 0, 10)
+	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Link", Params: []string{"q", "lang", "page"}})
+	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Form", Params: []string{"q"}})
+
+	if len(s.Endpoints) != 1 {
+		t.Fatalf("Expected 1 endpoint, got %d", len(s.Endpoints))
+	}
+	ep := s.Endpoints[0]
+	expectedParams := []string{"q", "lang", "page"}
+	if !reflect.DeepEqual(ep.Params, expectedParams) {
+		t.Errorf("Expected richer params %v to be retained, got %v", expectedParams, ep.Params)
+	}
+	if ep.Source != "Link" {
+		t.Errorf("Expected Source to remain Link, got %s", ep.Source)
+	}
+}
+
+func TestIsDestructivePath(t *testing.T) {
+	tests := []struct {
+		url      string
+		expected bool
+	}{
+		{"http://target.com/logout.php", true},
+		{"http://target.com/logout", true},
+		{"http://target.com/signout", true},
+		{"http://target.com/app/logout.php", true},
+		{"http://target.com/login", false},
+		{"http://target.com/about", false},
+		{"http://target.com/", false},
+	}
+
+	for _, tc := range tests {
+		got := isDestructivePath(tc.url)
+		if got != tc.expected {
+			t.Errorf("isDestructivePath(%q) = %v; want %v", tc.url, got, tc.expected)
+		}
+	}
+}
+
+func TestSpider_DestructivePathNotCrawled(t *testing.T) {
+	visitedLogout := false
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`
+			<a href="/logout.php">Logout</a>
+			<a href="/page1">Page 1</a>
+		`))
+	})
+	mux.HandleFunc("/logout.php", func(w http.ResponseWriter, r *http.Request) {
+		visitedLogout = true
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`Logged out`))
+	})
+	mux.HandleFunc("/page1", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`OK`))
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	s, _ := NewSpider(server.URL, 1, 10)
+	endpoints, err := s.Crawl(context.Background())
+	if err != nil {
+		t.Fatalf("Crawl failed: %v", err)
+	}
+
+	if visitedLogout {
+		t.Error("Destructive path /logout.php was crawled!")
+	}
+
+	foundLogout := false
+	foundPage1 := false
+	for _, ep := range endpoints {
+		if ep.URL == server.URL+"/logout.php" {
+			foundLogout = true
+		}
+		if ep.URL == server.URL+"/page1" {
+			foundPage1 = true
+		}
+	}
+
+	if !foundLogout {
+		t.Error("Destructive path /logout.php was not added to Endpoints list")
+	}
+	if !foundPage1 {
+		t.Error("Normal path /page1 was not discovered")
+	}
+}
