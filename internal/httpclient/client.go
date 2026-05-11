@@ -51,7 +51,10 @@ type ResponseResult struct {
 
 // Client wraps an http.Client so scanner modules can share request behaviour.
 type Client struct {
-	httpClient *http.Client
+	httpClient     *http.Client
+	// DefaultHeaders are applied to every outgoing request before per-request
+	// headers. Used for auth cookies, bearer tokens, and custom headers.
+	DefaultHeaders map[string]string
 }
 
 // DefaultClient is a pre-configured HTTP client with a sensible timeout and
@@ -75,6 +78,21 @@ func NewClient(httpClient *http.Client) *Client {
 	return &Client{httpClient: httpClient}
 }
 
+// NewClientWithAuth creates a Client with default headers applied to every request.
+// Use for authenticated scanning where cookies or bearer tokens must be attached.
+func NewClientWithAuth(httpClient *http.Client, defaultHeaders map[string]string) *Client {
+	c := NewClient(httpClient)
+	c.DefaultHeaders = defaultHeaders
+	return c
+}
+
+// SetDefaultClient replaces the package-level DefaultClient. Call this before
+// starting the crawler or scanner so that all code paths (including the
+// crawler's implicit use of DefaultClient) pick up auth headers.
+func SetDefaultClient(c *Client) {
+	DefaultClient = c
+}
+
 // HTTPClient exposes the wrapped net/http client for read-only integration points.
 func (c *Client) HTTPClient() *http.Client {
 	return c.httpClient
@@ -91,6 +109,9 @@ func (c *Client) Submit(req SubmitRequest) (*ResponseResult, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Apply default (auth) headers first, then per-request overrides.
+	applyDefaultHeaders(httpReq, c.DefaultHeaders)
 
 	start := time.Now()
 	resp, err := c.httpClient.Do(httpReq)
@@ -177,6 +198,18 @@ func applyHeaders(req *http.Request, headers map[string]string) {
 	}
 }
 
+// applyDefaultHeaders injects the client-level default headers (auth cookies,
+// bearer tokens, etc.) onto the request. Per-request headers set by
+// applyHeaders will have already been applied via buildSubmitRequest, so
+// defaults must not overwrite them — we only set if not already present.
+func applyDefaultHeaders(req *http.Request, defaults map[string]string) {
+	for key, value := range defaults {
+		if req.Header.Get(key) == "" {
+			req.Header.Set(key, value)
+		}
+	}
+}
+
 // Fetch performs an HTTP GET against the given URL and returns the full response
 // including the body as a string.
 func Fetch(url string) (*ResponseResult, error) {
@@ -206,6 +239,10 @@ func FetchHeadersWithContext(ctx context.Context, rawURL string) (*HeaderResult,
 		return nil, fmt.Errorf("building request: %w", err)
 	}
 	req.Header.Set("User-Agent", userAgent)
+
+	// Apply auth headers so the initial status check reflects the
+	// authenticated view of the site.
+	applyDefaultHeaders(req, DefaultClient.DefaultHeaders)
 
 	start := time.Now()
 	resp, err := DefaultClient.httpClient.Do(req)
