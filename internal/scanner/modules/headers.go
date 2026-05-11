@@ -72,14 +72,11 @@ func (m *HeadersModule) Run(ctx context.Context, endpoints []crawler.Endpoint) (
 	originHeaders := make(map[string]http.Header)
 
 	for _, ep := range endpoints {
-		if ep.Method != "GET" {
+		if ep.Method != "GET" || ep.IsDestructive {
 			continue
 		}
 
-		origin := ep.URL
-		if u, err := url.Parse(ep.URL); err == nil {
-			origin = u.Scheme + "://" + u.Host
-		}
+		origin := originOf(ep.URL)
 		if _, checked := originHeaders[origin]; checked {
 			continue
 		}
@@ -92,26 +89,28 @@ func (m *HeadersModule) Run(ctx context.Context, endpoints []crawler.Endpoint) (
 		originHeaders[origin] = result.Headers
 	}
 
-	// Pass 2: For every GET endpoint, generate findings using the cached headers
-	// for that endpoint's origin. This way Group() will see one finding per
-	// (header, endpoint) pair and aggregate them under the correct grouped entry.
-	var findings []scanner.Finding
-
+	// Pass 2: Emit ONE finding per origin per missing header.
+	// Pick a representative URL: prefer Seed, then first GET endpoint.
+	representativeURL := make(map[string]crawler.Endpoint)
 	for _, ep := range endpoints {
-		if ep.Method != "GET" {
+		if ep.Method != "GET" || ep.IsDestructive {
 			continue
 		}
-
-		origin := ep.URL
-		if u, err := url.Parse(ep.URL); err == nil {
-			origin = u.Scheme + "://" + u.Host
+		origin := originOf(ep.URL)
+		if _, exists := representativeURL[origin]; !exists {
+			representativeURL[origin] = ep
 		}
+		if ep.Source == "Seed" {
+			representativeURL[origin] = ep // Seed always wins
+		}
+	}
 
+	var findings []scanner.Finding
+	for origin, ep := range representativeURL {
 		headers := originHeaders[origin]
 		if headers == nil {
 			continue // origin either failed to fetch or was not checked
 		}
-
 		findings = append(findings, auditHeaders(ep, headers)...)
 	}
 
@@ -166,4 +165,12 @@ func canonicalHeader(s string) string {
 		}
 	}
 	return strings.Join(parts, "-")
+}
+
+func originOf(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	return u.Scheme + "://" + u.Host
 }
