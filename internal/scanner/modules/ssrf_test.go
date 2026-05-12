@@ -92,7 +92,7 @@ func TestSSRFModule_CloudMetadataReflection(t *testing.T) {
 	}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL + "/proxy/fetch", Method: "GET", Params: []string{"url"}},
+		{URL: ts.URL + "/proxy/fetch", Method: "GET", Params: map[string]string{"url": ""}},
 	}
 
 	findings, err := m.Run(context.Background(), endpoints)
@@ -132,7 +132,7 @@ func TestSSRFModule_InternalIPReflection(t *testing.T) {
 	}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL + "/proxy/fetch", Method: "GET", Params: []string{"url"}},
+		{URL: ts.URL + "/proxy/fetch", Method: "GET", Params: map[string]string{"url": ""}},
 	}
 
 	findings, err := m.Run(context.Background(), endpoints)
@@ -167,7 +167,7 @@ func TestSSRFModule_BaselineFP(t *testing.T) {
 	}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL + "/proxy/always-apache", Method: "GET", Params: []string{"url"}},
+		{URL: ts.URL + "/proxy/always-apache", Method: "GET", Params: map[string]string{"url": ""}},
 	}
 
 	findings, err := m.Run(context.Background(), endpoints)
@@ -223,7 +223,7 @@ func TestSSRFModule_StatusDifferential_Dedicated(t *testing.T) {
 	}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL + "/", Method: "GET", Params: []string{"url"}},
+		{URL: ts.URL + "/", Method: "GET", Params: map[string]string{"url": ""}},
 	}
 
 	findings, err := m.Run(context.Background(), endpoints)
@@ -265,7 +265,7 @@ func TestSSRFModule_TimingAnomaly(t *testing.T) {
 	}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL + "/", Method: "GET", Params: []string{"url"}},
+		{URL: ts.URL + "/", Method: "GET", Params: map[string]string{"url": ""}},
 	}
 
 	findings, err := m.Run(context.Background(), endpoints)
@@ -302,7 +302,7 @@ func TestSSRFModule_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL + "/proxy/fetch", Method: "GET", Params: []string{"url"}},
+		{URL: ts.URL + "/proxy/fetch", Method: "GET", Params: map[string]string{"url": ""}},
 	}
 
 	findings, err := m.Run(ctx, endpoints)

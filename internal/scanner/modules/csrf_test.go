@@ -23,7 +23,7 @@ func TestCSRFModule(t *testing.T) {
 		{
 			name: "GET form is ignored",
 			endpoints: []crawler.Endpoint{
-				{URL: "http://example.com/search", Method: "GET", Source: "Form", Params: []string{"q"}},
+				{URL: "http://example.com/search", Method: "GET", Source: "Form", Params: map[string]string{"q": ""}},
 			},
 			wantFlags:     0,
 			wantGrouped:   0,
@@ -32,7 +32,7 @@ func TestCSRFModule(t *testing.T) {
 		{
 			name: "POST form with standard token is ignored",
 			endpoints: []crawler.Endpoint{
-				{URL: "http://example.com/update", Method: "POST", Source: "Form", Params: []string{"data", "csrf_token"}},
+				{URL: "http://example.com/update", Method: "POST", Source: "Form", Params: map[string]string{"data": "", "csrf_token": ""}},
 			},
 			wantFlags:     0,
 			wantGrouped:   0,
@@ -41,11 +41,11 @@ func TestCSRFModule(t *testing.T) {
 		{
 			name: "Token aliases are correctly identified as safe",
 			endpoints: []crawler.Endpoint{
-				{URL: "http://example.com/a", Method: "POST", Source: "Form", Params: []string{"_csrf"}},
-				{URL: "http://example.com/b", Method: "POST", Source: "Form", Params: []string{"xsrf_token"}},
-				{URL: "http://example.com/c", Method: "POST", Source: "Form", Params: []string{"__RequestVerificationToken"}},
-				{URL: "http://example.com/d", Method: "POST", Source: "Form", Params: []string{"authenticity_token"}},
-				{URL: "http://example.com/e", Method: "POST", Source: "Form", Params: []string{"nonce"}},
+				{URL: "http://example.com/a", Method: "POST", Source: "Form", Params: map[string]string{"_csrf": ""}},
+				{URL: "http://example.com/b", Method: "POST", Source: "Form", Params: map[string]string{"xsrf_token": ""}},
+				{URL: "http://example.com/c", Method: "POST", Source: "Form", Params: map[string]string{"__RequestVerificationToken": ""}},
+				{URL: "http://example.com/d", Method: "POST", Source: "Form", Params: map[string]string{"authenticity_token": ""}},
+				{URL: "http://example.com/e", Method: "POST", Source: "Form", Params: map[string]string{"nonce": ""}},
 			},
 			wantFlags:     0,
 			wantGrouped:   0,
@@ -54,7 +54,7 @@ func TestCSRFModule(t *testing.T) {
 		{
 			name: "POST form without token is flagged",
 			endpoints: []crawler.Endpoint{
-				{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: []string{"id", "confirm"}},
+				{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: map[string]string{"id": "", "confirm": ""}},
 			},
 			wantFlags:     1,
 			wantGrouped:   1,
@@ -63,8 +63,8 @@ func TestCSRFModule(t *testing.T) {
 		{
 			name: "Duplicate identical forms deduped",
 			endpoints: []crawler.Endpoint{
-				{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: []string{"id"}},
-				{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: []string{"id"}},
+				{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: map[string]string{"id": ""}},
+				{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: map[string]string{"id": ""}},
 			},
 			wantFlags:     1,
 			wantGrouped:   1,
@@ -73,8 +73,8 @@ func TestCSRFModule(t *testing.T) {
 		{
 			name: "Non-form POST endpoints are safely ignored",
 			endpoints: []crawler.Endpoint{
-				{URL: "http://example.com/api/delete", Method: "POST", Source: "API", Params: []string{"id"}},
-				{URL: "http://example.com/api/create", Method: "POST", Source: "Link", Params: []string{"payload"}},
+				{URL: "http://example.com/api/delete", Method: "POST", Source: "API", Params: map[string]string{"id": ""}},
+				{URL: "http://example.com/api/create", Method: "POST", Source: "Link", Params: map[string]string{"payload": ""}},
 			},
 			wantFlags:     0,
 			wantGrouped:   0,
@@ -83,9 +83,9 @@ func TestCSRFModule(t *testing.T) {
 		{
 			name: "Multiple distinct vulnerable forms on different URLs group into one finding",
 			endpoints: []crawler.Endpoint{
-				{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: []string{"id"}},
-				{URL: "http://example.com/update", Method: "POST", Source: "Form", Params: []string{"user", "email"}},
-				{URL: "http://example.com/post", Method: "POST", Source: "Form", Params: []string{"content"}},
+				{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: map[string]string{"id": ""}},
+				{URL: "http://example.com/update", Method: "POST", Source: "Form", Params: map[string]string{"user": "", "email": ""}},
+				{URL: "http://example.com/post", Method: "POST", Source: "Form", Params: map[string]string{"content": ""}},
 			},
 			// They yield distinct findings out of the module...
 			wantFlags:     3,
@@ -156,7 +156,7 @@ func TestCSRFModule(t *testing.T) {
 		cancel() // Cancel immediately
 
 		endpoints := []crawler.Endpoint{
-			{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: []string{"id"}},
+			{URL: "http://example.com/delete", Method: "POST", Source: "Form", Params: map[string]string{"id": ""}},
 		}
 
 		findings, err := module.Run(ctx, endpoints)

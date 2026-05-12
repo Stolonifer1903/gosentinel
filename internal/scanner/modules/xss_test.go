@@ -39,7 +39,7 @@ func TestXSSModule(t *testing.T) {
 		{
 			name: "GET reflected XSS flagged",
 			endpoints: []crawler.Endpoint{
-				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Form", Params: []string{"q"}},
+				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Form", Params: map[string]string{"q": ""}},
 			},
 			wantGrouped:   1,
 			wantEndpoints: 1,
@@ -56,7 +56,7 @@ func TestXSSModule(t *testing.T) {
 		{
 			name: "POST reflected XSS flagged",
 			endpoints: []crawler.Endpoint{
-				{URL: ts.URL + "/reflect/post", Method: "POST", Source: "Form", Params: []string{"input"}},
+				{URL: ts.URL + "/reflect/post", Method: "POST", Source: "Form", Params: map[string]string{"input": ""}},
 			},
 			wantGrouped:   1,
 			wantEndpoints: 1,
@@ -73,7 +73,7 @@ func TestXSSModule(t *testing.T) {
 		{
 			name: "Escaped reflection flagged as potential",
 			endpoints: []crawler.Endpoint{
-				{URL: ts.URL + "/safe/get", Method: "GET", Source: "Form", Params: []string{"q"}},
+				{URL: ts.URL + "/safe/get", Method: "GET", Source: "Form", Params: map[string]string{"q": ""}},
 			},
 			wantGrouped:   1,
 			wantEndpoints: 1,
@@ -90,7 +90,7 @@ func TestXSSModule(t *testing.T) {
 		{
 			name: "JSON reflection downgraded",
 			endpoints: []crawler.Endpoint{
-				{URL: ts.URL + "/reflect/json", Method: "GET", Source: "Form", Params: []string{"q"}},
+				{URL: ts.URL + "/reflect/json", Method: "GET", Source: "Form", Params: map[string]string{"q": ""}},
 			},
 			wantGrouped:   1,
 			wantEndpoints: 1,
@@ -107,7 +107,7 @@ func TestXSSModule(t *testing.T) {
 		{
 			name: "Both safe and unsafe params flagged appropriately",
 			endpoints: []crawler.Endpoint{
-				{URL: ts.URL + "/reflect/partial", Method: "GET", Source: "Form", Params: []string{"safe", "unsafe"}},
+				{URL: ts.URL + "/reflect/partial", Method: "GET", Source: "Form", Params: map[string]string{"safe": "", "unsafe": ""}},
 			},
 			wantGrouped:   2,
 			wantEndpoints: 1,
@@ -133,7 +133,7 @@ func TestXSSModule(t *testing.T) {
 			// The old guard (Source == "Form") was too narrow and missed GET link params.
 			name: "Non-form endpoint with params is tested",
 			endpoints: []crawler.Endpoint{
-				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Link", Params: []string{"q"}},
+				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Link", Params: map[string]string{"q": ""}},
 			},
 			wantGrouped:   1,
 			wantEndpoints: 1,
@@ -157,8 +157,8 @@ func TestXSSModule(t *testing.T) {
 		{
 			name: "Grouped findings across two URLs",
 			endpoints: []crawler.Endpoint{
-				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Form", Params: []string{"q"}},
-				{URL: ts.URL + "/reflect/get-alt", Method: "GET", Source: "Form", Params: []string{"q"}},
+				{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Form", Params: map[string]string{"q": ""}},
+				{URL: ts.URL + "/reflect/get-alt", Method: "GET", Source: "Form", Params: map[string]string{"q": ""}},
 			},
 			wantGrouped:   1,
 			wantEndpoints: 2,
@@ -182,7 +182,7 @@ func TestXSSModule(t *testing.T) {
 		{
 			name: "Tier 2 fallback yields one finding",
 			endpoints: []crawler.Endpoint{
-				{URL: ts.URL + "/reflect/fallback", Method: "GET", Source: "Form", Params: []string{"q"}},
+				{URL: ts.URL + "/reflect/fallback", Method: "GET", Source: "Form", Params: map[string]string{"q": ""}},
 			},
 			wantGrouped:   1,
 			wantEndpoints: 1,
@@ -269,7 +269,7 @@ func TestXSSModule(t *testing.T) {
 		cancel()
 
 		findings, err := module.Run(ctx, []crawler.Endpoint{
-			{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Form", Params: []string{"q"}},
+			{URL: ts.URL + "/reflect/get", Method: "GET", Source: "Form", Params: map[string]string{"q": ""}},
 		})
 		if err != context.Canceled {
 			t.Fatalf("got error %v, want %v", err, context.Canceled)

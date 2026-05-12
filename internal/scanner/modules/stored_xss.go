@@ -129,16 +129,20 @@ func (m *StoredXSSModule) injectPhase(ctx context.Context, endpoints []crawler.E
 			continue
 		}
 
-		for _, param := range ep.Params {
+		for param := range ep.Params {
 			canary := storedXSSCanary(ep.URL, ep.Method, param)
 
 			// Phase 1: Write plain-text canary
 			params := make(map[string]string)
-			for _, p := range ep.Params {
+			for p, originalValue := range ep.Params {
 				if p == param {
 					params[p] = canary
 				} else {
-					params[p] = "test"
+					if originalValue != "" {
+						params[p] = originalValue
+					} else {
+						params[p] = "test"
+					}
 				}
 			}
 

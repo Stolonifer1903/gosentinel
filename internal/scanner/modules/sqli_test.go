@@ -39,7 +39,7 @@ func TestSQLiModule_ErrorBased(t *testing.T) {
 	m := &SQLiModule{Client: client}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL, Method: "GET", Params: []string{"id"}, Source: "Link"},
+		{URL: ts.URL, Method: "GET", Params: map[string]string{"id": ""}, Source: "Link"},
 	}
 
 	findings, err := m.Run(context.Background(), endpoints)
@@ -67,7 +67,7 @@ func TestSQLiModule_ErrorBased_BaselineFP(t *testing.T) {
 	m := &SQLiModule{Client: client}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL, Method: "GET", Params: []string{"id"}, Source: "Link"},
+		{URL: ts.URL, Method: "GET", Params: map[string]string{"id": ""}, Source: "Link"},
 	}
 
 	findings, err := m.Run(context.Background(), endpoints)
@@ -102,7 +102,7 @@ func TestSQLiModule_TimeBased(t *testing.T) {
 	}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL, Method: "GET", Params: []string{"id"}, Source: "Link"},
+		{URL: ts.URL, Method: "GET", Params: map[string]string{"id": ""}, Source: "Link"},
 	}
 
 	findings, err := m.Run(context.Background(), endpoints)
@@ -138,7 +138,7 @@ func TestSQLiModule_TimeBased_SlowServerFP(t *testing.T) {
 	}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL, Method: "GET", Params: []string{"id"}, Source: "Link"},
+		{URL: ts.URL, Method: "GET", Params: map[string]string{"id": ""}, Source: "Link"},
 	}
 
 	findings, err := m.Run(context.Background(), endpoints)
@@ -165,7 +165,7 @@ func TestSQLiModule_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL, Method: "GET", Params: []string{"id"}, Source: "Link"},
+		{URL: ts.URL, Method: "GET", Params: map[string]string{"id": ""}, Source: "Link"},
 	}
 
 	_, err := m.Run(ctx, endpoints)
@@ -200,7 +200,7 @@ func TestSQLiModule_AllPayloadsTested(t *testing.T) {
 	}
 
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL, Method: "GET", Params: []string{"q"}, Source: "Form"},
+		{URL: ts.URL, Method: "GET", Params: map[string]string{"q": ""}, Source: "Form"},
 	}
 
 	m.Run(context.Background(), endpoints)
@@ -264,7 +264,7 @@ func TestSQLiModule_HeaderInjectionGated(t *testing.T) {
 
 	client := httpclient.NewClient(ts.Client())
 	endpoints := []crawler.Endpoint{
-		{URL: ts.URL, Method: "GET", Params: []string{"id"}, Source: "Link"},
+		{URL: ts.URL, Method: "GET", Params: map[string]string{"id": ""}, Source: "Link"},
 	}
 
 	// 1. Run with header injection disabled

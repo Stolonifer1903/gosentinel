@@ -111,7 +111,7 @@ func (m *SQLiModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]s
 		}
 
 		// 1. Probe URL parameters / form fields
-		for _, param := range ep.Params {
+		for param := range ep.Params {
 			found, err := m.probeEndpoint(ctx, client, ep, param, "Param", seen, baseline)
 			if err != nil && ctx.Err() != nil {
 				return findings, ctx.Err()
@@ -227,11 +227,15 @@ func (m *SQLiModule) submitProbe(ctx context.Context, client *httpclient.Client,
 
 func (m *SQLiModule) prepareParams(ep crawler.Endpoint, target, payload string) map[string]string {
 	params := make(map[string]string, len(ep.Params))
-	for _, p := range ep.Params {
+	for p, originalValue := range ep.Params {
 		if p == target {
 			params[p] = payload
 		} else {
-			params[p] = "1" // Default value
+			if originalValue != "" {
+				params[p] = originalValue
+			} else {
+				params[p] = "1" // Default value fallback
+			}
 		}
 	}
 	return params

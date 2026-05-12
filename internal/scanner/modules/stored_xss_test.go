@@ -25,7 +25,7 @@ func TestStoredXSSModule(t *testing.T) {
 	t.Run("Canary stored and found on read page", func(t *testing.T) {
 		ts.reset()
 		endpoints := []crawler.Endpoint{
-			{URL: ts.URL + "/post", Method: "POST", Source: "Form", Params: []string{"comment"}},
+			{URL: ts.URL + "/post", Method: "POST", Source: "Form", Params: map[string]string{"comment": ""}},
 			{URL: ts.URL + "/view", Method: "GET", Source: "Link"},
 		}
 
@@ -50,7 +50,7 @@ func TestStoredXSSModule(t *testing.T) {
 	t.Run("Dedup works for same canary on multiple read pages", func(t *testing.T) {
 		ts.reset()
 		endpoints := []crawler.Endpoint{
-			{URL: ts.URL + "/post", Method: "POST", Source: "Form", Params: []string{"comment"}},
+			{URL: ts.URL + "/post", Method: "POST", Source: "Form", Params: map[string]string{"comment": ""}},
 			{URL: ts.URL + "/view", Method: "GET", Source: "Link"},
 			{URL: ts.URL + "/view-dup", Method: "GET", Source: "Link"},
 		}
@@ -71,7 +71,7 @@ func TestStoredXSSModule(t *testing.T) {
 		cancel()
 
 		_, err := module.Run(ctx, []crawler.Endpoint{
-			{URL: ts.URL + "/post", Method: "POST", Source: "Form", Params: []string{"comment"}},
+			{URL: ts.URL + "/post", Method: "POST", Source: "Form", Params: map[string]string{"comment": ""}},
 		})
 		if err != context.Canceled {
 			t.Errorf("expected context.Canceled, got %v", err)
@@ -98,7 +98,7 @@ func TestStoredXSSModule(t *testing.T) {
 	t.Run("Server discards input yields zero findings", func(t *testing.T) {
 		ts.reset()
 		endpoints := []crawler.Endpoint{
-			{URL: ts.URL + "/discard-post", Method: "POST", Source: "Form", Params: []string{"comment"}},
+			{URL: ts.URL + "/discard-post", Method: "POST", Source: "Form", Params: map[string]string{"comment": ""}},
 			{URL: ts.URL + "/view", Method: "GET", Source: "Link"},
 		}
 
@@ -115,7 +115,7 @@ func TestStoredXSSModule(t *testing.T) {
 	t.Run("Multiple params each produce independent findings", func(t *testing.T) {
 		ts.reset()
 		endpoints := []crawler.Endpoint{
-			{URL: ts.URL + "/multi-post", Method: "POST", Source: "Form", Params: []string{"title", "body"}},
+			{URL: ts.URL + "/multi-post", Method: "POST", Source: "Form", Params: map[string]string{"title": "", "body": ""}},
 			{URL: ts.URL + "/view", Method: "GET", Source: "Link"},
 		}
 
@@ -140,7 +140,7 @@ func TestStoredXSSModule(t *testing.T) {
 	t.Run("Finding fields are correctly populated", func(t *testing.T) {
 		ts.reset()
 		endpoints := []crawler.Endpoint{
-			{URL: ts.URL + "/post", Method: "POST", Source: "Form", Params: []string{"comment"}},
+			{URL: ts.URL + "/post", Method: "POST", Source: "Form", Params: map[string]string{"comment": ""}},
 			{URL: ts.URL + "/view", Method: "GET", Source: "Link"},
 		}
 
@@ -223,7 +223,7 @@ func TestStoredXSSModule(t *testing.T) {
 
 		mod := NewStoredXSSModule(errClient, true)
 		endpoints := []crawler.Endpoint{
-			{URL: errSrv.URL + "/post", Method: "POST", Source: "Form", Params: []string{"x"}},
+			{URL: errSrv.URL + "/post", Method: "POST", Source: "Form", Params: map[string]string{"x": ""}},
 			{URL: errSrv.URL + "/view", Method: "GET", Source: "Link"},
 		}
 

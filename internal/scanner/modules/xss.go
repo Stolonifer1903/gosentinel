@@ -100,7 +100,7 @@ func (m *XSSModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]sc
 			continue
 		}
 
-		for _, param := range ep.Params {
+		for param := range ep.Params {
 			analysis, ok, err := runTieredXSSProbe(ctx, client, ep, param)
 			if err != nil {
 				// Only propagate genuine context cancellation — transient HTTP
@@ -174,12 +174,16 @@ func runTieredXSSProbe(ctx context.Context, client *httpclient.Client, ep crawle
 			}
 
 			params := make(map[string]string, len(ep.Params))
-			for _, p := range ep.Params {
+			for p, originalValue := range ep.Params {
 				if p == param {
 					params[p] = strings.ReplaceAll(probe.Template, "{PARAM}", param)
 					continue
 				}
-				params[p] = "test"
+				if originalValue != "" {
+					params[p] = originalValue
+				} else {
+					params[p] = "test"
+				}
 			}
 
 			result, err := client.Submit(httpclient.SubmitRequest{

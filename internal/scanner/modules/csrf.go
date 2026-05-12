@@ -51,8 +51,10 @@ func (m *CSRFModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]s
 		// Create a unique key for this form submission to avoid duplicates.
 		// Params are sorted before joining so that identical forms whose parameters
 		// were discovered in different orders are still recognised as the same form.
-		sortedParams := make([]string, len(ep.Params))
-		copy(sortedParams, ep.Params)
+		sortedParams := make([]string, 0, len(ep.Params))
+		for p := range ep.Params {
+			sortedParams = append(sortedParams, p)
+		}
 		sort.Strings(sortedParams)
 		formKey := ep.URL + "|" + method + "|" + strings.Join(sortedParams, ",")
 		if flaggedForms[formKey] {
@@ -61,7 +63,7 @@ func (m *CSRFModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]s
 
 		// Check if any parameter name matches our token heuristic
 		hasToken := false
-		for _, param := range ep.Params {
+		for param := range ep.Params {
 			if tokenPattern.MatchString(param) {
 				hasToken = true
 				break
@@ -76,7 +78,11 @@ func (m *CSRFModule) Run(ctx context.Context, endpoints []crawler.Endpoint) ([]s
 
 			detail := ""
 			if len(ep.Params) > 0 {
-				detail = strings.Join(ep.Params, ", ")
+				var paramsList []string
+				for p := range ep.Params {
+					paramsList = append(paramsList, p)
+				}
+				detail = strings.Join(paramsList, ", ")
 			}
 
 			findings = append(findings, scanner.Finding{
