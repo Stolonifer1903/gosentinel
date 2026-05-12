@@ -439,7 +439,12 @@ func printEndpoints(endpoints []crawler.Endpoint, verbose bool) {
 
 		paramsOutput := ""
 		if len(e.Params) > 0 {
-			paramsOutput = dim(" [%s]", strings.Join(e.Params, ", "))
+			var paramKeys []string
+			for p := range e.Params {
+				paramKeys = append(paramKeys, p)
+			}
+			sort.Strings(paramKeys)
+			paramsOutput = dim(" [%s]", strings.Join(paramKeys, ", "))
 		}
 
 		// Truncate long URLs unless verbose
