@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"sync"
 
@@ -17,7 +16,7 @@ import (
 type Endpoint struct {
 	URL           string
 	Method        string
-	Params        []string
+	Params        map[string]string
 	Source        string // "Link", "Form"
 	IsDestructive bool   // true if the path is known to destroy session state
 }
@@ -169,8 +168,8 @@ func (s *Spider) addEndpoint(e Endpoint) {
 
 	if idx, exists := s.endpointIdx[key]; exists {
 		existing := &s.Endpoints[idx]
-		// Upgrade: prefer the entry with more params (Form > Link).
-		if len(e.Params) > len(existing.Params) {
+		// Upgrade: prefer the entry with more params. If equal, prefer Form (often has better values).
+		if len(e.Params) > len(existing.Params) || (len(e.Params) == len(existing.Params) && existing.Source == "Link" && e.Source == "Form") {
 			existing.Params = e.Params
 			existing.Source = e.Source
 		}
@@ -268,7 +267,7 @@ func (s *Spider) resolveURL(base, ref string) string {
 
 func (s *Spider) parseForm(baseURL string, n *html.Node) Endpoint {
 	var action, method string
-	params := []string{}
+	params := make(map[string]string)
 
 	for _, a := range n.Attr {
 		if a.Key == "action" {
@@ -285,10 +284,18 @@ func (s *Spider) parseForm(baseURL string, n *html.Node) Endpoint {
 	var extractInputs func(*html.Node)
 	extractInputs = func(n *html.Node) {
 		if n.Type == html.ElementNode && (n.Data == "input" || n.Data == "textarea" || n.Data == "select") {
+			name := ""
+			val := ""
 			for _, a := range n.Attr {
-				if a.Key == "name" && a.Val != "" {
-					params = append(params, a.Val)
+				if a.Key == "name" {
+					name = a.Val
 				}
+				if a.Key == "value" {
+					val = a.Val
+				}
+			}
+			if name != "" {
+				params[name] = val
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -319,27 +326,14 @@ func (s *Spider) parseForm(baseURL string, n *html.Node) Endpoint {
 	}
 }
 
-// sortedJoin returns a canonical, comma-joined string of params sorted
-// alphabetically. It operates on a copy so the original slice is not mutated.
-// Used by addEndpoint to perform order-independent duplicate detection.
-func sortedJoin(params []string) string {
-	if len(params) == 0 {
-		return ""
-	}
-	cp := make([]string, len(params))
-	copy(cp, params)
-	sort.Strings(cp)
-	return strings.Join(cp, ",")
-}
-
 // extractQueryParams parses a full URL and returns:
 //   - the base URL with the query string stripped
-//   - a sorted slice of query parameter names (nil if none)
+//   - a map of query parameter names to their first value
 //
 // Stripping the query string from the URL keeps the visited-set and endpoint
-// deduplication query-agnostic, while the param names are surfaced to active
+// deduplication query-agnostic, while the params map is surfaced to active
 // modules so they can inject payloads into each parameter individually.
-func extractQueryParams(rawURL string) (base string, params []string) {
+func extractQueryParams(rawURL string) (base string, params map[string]string) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.RawQuery == "" {
 		return rawURL, nil
@@ -350,10 +344,14 @@ func extractQueryParams(rawURL string) (base string, params []string) {
 		return rawURL, nil
 	}
 
-	for key := range query {
-		params = append(params, key)
+	params = make(map[string]string)
+	for key, values := range query {
+		if len(values) > 0 {
+			params[key] = values[0]
+		} else {
+			params[key] = ""
+		}
 	}
-	sort.Strings(params)
 
 	parsed.RawQuery = ""
 	return parsed.String(), params

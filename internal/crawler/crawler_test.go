@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -165,7 +166,7 @@ func TestSpider_FormExtraction(t *testing.T) {
 		if loginForm.Method != "POST" {
 			t.Errorf("Expected method POST for /login, got %s", loginForm.Method)
 		}
-		expectedParams := []string{"username", "password"}
+		expectedParams := map[string]string{"username": "", "password": ""}
 		if !reflect.DeepEqual(loginForm.Params, expectedParams) {
 			t.Errorf("Expected params %v for /login, got %v", expectedParams, loginForm.Params)
 		}
@@ -179,7 +180,7 @@ func TestSpider_FormExtraction(t *testing.T) {
 		if implicitForm.Method != "GET" {
 			t.Errorf("Expected method GET for implicit form, got %s", implicitForm.Method)
 		}
-		expectedParams := []string{"search", "desc", "category"}
+		expectedParams := map[string]string{"search": "", "desc": "", "category": ""}
 		if !reflect.DeepEqual(implicitForm.Params, expectedParams) {
 			t.Errorf("Expected params %v for implicit form, got %v", expectedParams, implicitForm.Params)
 		}
@@ -217,7 +218,12 @@ func TestSpider_LinkExtraction(t *testing.T) {
 	endpointMap := make(map[epKey]Endpoint)
 	for _, e := range endpoints {
 		if e.Source == "Link" || e.Source == "Seed" {
-			k := epKey{url: e.URL, params: sortedJoin(e.Params)}
+			var paramKeys []string
+			for k := range e.Params {
+				paramKeys = append(paramKeys, k)
+			}
+			sort.Strings(paramKeys)
+			k := epKey{url: e.URL, params: strings.Join(paramKeys, ",")}
 			endpointMap[k] = e
 		}
 	}
@@ -243,7 +249,7 @@ func TestSpider_LinkExtraction(t *testing.T) {
 	if !ok {
 		t.Fatal("Expected parameterised endpoint {URL: '/', Params: ['query']} not found")
 	}
-	expectedParams := []string{"query"}
+	expectedParams := map[string]string{"query": "1"}
 	if !reflect.DeepEqual(paramEP.Params, expectedParams) {
 		t.Errorf("Parameterised link: expected Params %v, got %v", expectedParams, paramEP.Params)
 	}
@@ -299,7 +305,7 @@ func TestSpider_ScopeSecurity(t *testing.T) {
 func TestAddEndpoint_MergesLinkAndForm(t *testing.T) {
 	s, _ := NewSpider("http://example.com", 0, 10)
 	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Link", Params: nil})
-	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Form", Params: []string{"q", "page"}})
+	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Form", Params: map[string]string{"q": "", "page": ""}})
 
 	if len(s.Endpoints) != 1 {
 		t.Fatalf("Expected 1 endpoint, got %d", len(s.Endpoints))
@@ -308,7 +314,7 @@ func TestAddEndpoint_MergesLinkAndForm(t *testing.T) {
 	if ep.Source != "Form" {
 		t.Errorf("Expected source Form, got %s", ep.Source)
 	}
-	expectedParams := []string{"q", "page"}
+	expectedParams := map[string]string{"q": "", "page": ""}
 	if !reflect.DeepEqual(ep.Params, expectedParams) {
 		t.Errorf("Expected params %v, got %v", expectedParams, ep.Params)
 	}
@@ -317,7 +323,7 @@ func TestAddEndpoint_MergesLinkAndForm(t *testing.T) {
 func TestAddEndpoint_TrailingSlashNormalisation(t *testing.T) {
 	s, _ := NewSpider("http://example.com", 0, 10)
 	s.addEndpoint(Endpoint{URL: "http://example.com/vuln", Method: "GET", Source: "Link", Params: nil})
-	s.addEndpoint(Endpoint{URL: "http://example.com/vuln/", Method: "GET", Source: "Form", Params: []string{"id"}})
+	s.addEndpoint(Endpoint{URL: "http://example.com/vuln/", Method: "GET", Source: "Form", Params: map[string]string{"id": ""}})
 
 	if len(s.Endpoints) != 1 {
 		t.Fatalf("Expected 1 endpoint after slash normalisation, got %d", len(s.Endpoints))
@@ -326,7 +332,7 @@ func TestAddEndpoint_TrailingSlashNormalisation(t *testing.T) {
 	if ep.URL != "http://example.com/vuln" {
 		t.Errorf("Expected URL to have no trailing slash, got %s", ep.URL)
 	}
-	expectedParams := []string{"id"}
+	expectedParams := map[string]string{"id": ""}
 	if !reflect.DeepEqual(ep.Params, expectedParams) {
 		t.Errorf("Expected params %v, got %v", expectedParams, ep.Params)
 	}
@@ -335,7 +341,7 @@ func TestAddEndpoint_TrailingSlashNormalisation(t *testing.T) {
 func TestAddEndpoint_DifferentMethodsAreDistinct(t *testing.T) {
 	s, _ := NewSpider("http://example.com", 0, 10)
 	s.addEndpoint(Endpoint{URL: "http://example.com/upload", Method: "GET", Source: "Link", Params: nil})
-	s.addEndpoint(Endpoint{URL: "http://example.com/upload", Method: "POST", Source: "Form", Params: []string{"file"}})
+	s.addEndpoint(Endpoint{URL: "http://example.com/upload", Method: "POST", Source: "Form", Params: map[string]string{"file": ""}})
 
 	if len(s.Endpoints) != 2 {
 		t.Fatalf("Expected 2 endpoints (distinct methods), got %d", len(s.Endpoints))
@@ -344,14 +350,14 @@ func TestAddEndpoint_DifferentMethodsAreDistinct(t *testing.T) {
 
 func TestAddEndpoint_RicherLinkNotDowngradedByForm(t *testing.T) {
 	s, _ := NewSpider("http://example.com", 0, 10)
-	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Link", Params: []string{"q", "lang", "page"}})
-	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Form", Params: []string{"q"}})
+	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Link", Params: map[string]string{"q": "", "lang": "", "page": ""}})
+	s.addEndpoint(Endpoint{URL: "http://example.com/search", Method: "GET", Source: "Form", Params: map[string]string{"q": ""}})
 
 	if len(s.Endpoints) != 1 {
 		t.Fatalf("Expected 1 endpoint, got %d", len(s.Endpoints))
 	}
 	ep := s.Endpoints[0]
-	expectedParams := []string{"q", "lang", "page"}
+	expectedParams := map[string]string{"q": "", "lang": "", "page": ""}
 	if !reflect.DeepEqual(ep.Params, expectedParams) {
 		t.Errorf("Expected richer params %v to be retained, got %v", expectedParams, ep.Params)
 	}
