@@ -9,6 +9,7 @@ GoSentinel is a concurrent web vulnerability scanner designed for reconnaissance
   - **Passive Phase**: Modules that analyze responses safely (without mutation) run concurrently, maximizing throughput.
   - **Active Phase**: Modules that inject malicious payloads run sequentially to prevent data races, maintain target state integrity, and minimize aggressive traffic bursts.
 - **Attack Surface Mapping**: Automatically catalogs all discovered endpoints, form fields, and URL query parameters during the reconnaissance phase, exposing them systematically to active modules.
+- **Session Safety & Destructive Path Skipping**: Automatically identifies and flags "destructive" paths (e.g., `/logout`, `/signout`, `/logoff`) during crawling. The engine skips these endpoints for all active and passive modules by default to prevent accidental session termination during authenticated scans.
 - **Intelligent Deduplication & Grouping**: Automatically groups identical findings across multiple endpoints. It promotes findings based on **Confidence Levels** (Certain, Firm, Tentative) and deduplicates based on normalized URLs and parameter structures.
 - **Multi-format Reporting**: Outputs results dynamically via CLI progress hooks, generating structured JSON for CI/CD integrations or an interactive, dark-mode-enabled HTML dashboard for visual analysis.
 
@@ -53,7 +54,6 @@ go build -o gosentinel .
 - `--auth-header`: Custom authorization header (e.g., "Bearer eyJ...").
 - `--confirm-stored-xss`: Enable 2-phase verification of stored XSS via automated script injection.
 - `--ssrf-cloud-metadata`: Enable probing for AWS/GCP/Azure cloud metadata endpoints.
-- `--skip-destructive`: Automatically skip paths like `/logout` or `/signout` (default: true).
 - `-v, --verbose`: Show detailed URLs and technical evidence in terminal output.
 
 ## Developer Guide
