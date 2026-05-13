@@ -182,6 +182,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		modules.NewStoredXSSModule(sharedClient, confirmStored),
 		&modules.SQLiModule{Client: sharedClient, Config: modules.DefaultSQLiConfig},
 		&modules.SSRFModule{Client: sharedClient, Config: ssrfConfig},
+		&modules.IDORModule{Client: sharedClient, Config: modules.DefaultIDORConfig},
 	}
 	engine := scanner.NewEngine(activeModules)
 
