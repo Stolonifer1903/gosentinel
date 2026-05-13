@@ -23,6 +23,7 @@ GoSentinel is a concurrent web vulnerability scanner designed for reconnaissance
 | **Stored XSS** | Active  | Employs a 2-phase canary injection mechanism to detect persistent XSS. Safely prompts for user confirmation before writing data to target routes. |
 | **SQLi**       | Active  | Detects SQL Injection via error-based heuristics and time-based (blind) payload delays, validating against dynamic baseline response profiles.    |
 | **SSRF**       | Active  | Tests parameters for Server-Side Request Forgery using in-band reflection, cloud metadata endpoints, and partial-blind port scanning heuristics.  |
+| **IDOR**       | Active  | Detects Insecure Direct Object Reference via numeric ID enumeration and Jaccard similarity-based response analysis.                               |
 
 ## Quick Start
 
@@ -48,8 +49,11 @@ go build -o gosentinel .
 - `--depth`: Maximum crawl depth (default 2).
 - `--concurrency`: Number of concurrent workers (default 10).
 - `--output`: Path to save the HTML or JSON report.
+- `--auth-cookie`: Raw cookie string for authenticated scans (e.g., "session=123; user=admin").
+- `--auth-header`: Custom authorization header (e.g., "Bearer eyJ...").
 - `--confirm-stored-xss`: Enable 2-phase verification of stored XSS via automated script injection.
 - `--ssrf-cloud-metadata`: Enable probing for AWS/GCP/Azure cloud metadata endpoints.
+- `--skip-destructive`: Automatically skip paths like `/logout` or `/signout` (default: true).
 - `-v, --verbose`: Show detailed URLs and technical evidence in terminal output.
 
 ## Developer Guide
