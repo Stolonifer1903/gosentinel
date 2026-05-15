@@ -57,7 +57,9 @@ var scanCmd = &cobra.Command{
 		cyan("  • Reflected XSS    ") + dim("(Active) ") + white(" — Tests parameters for immediate reflection.\n") +
 		cyan("  • Stored XSS       ") + dim("(Active) ") + white(" — 2-phase canary detection for persisted data.\n") +
 		cyan("  • SQL Injection    ") + dim("(Active) ") + white(" — Tests for error-based and time-based SQLi.\n") +
-		cyan("  • SSRF             ") + dim("(Active) ") + white(" — Tests for in-band, partial, and timing-based SSRF.\n\n") +
+		cyan("  • SSRF             ") + dim("(Active) ") + white(" — Tests for in-band, partial, and timing-based SSRF.\n") +
+		cyan("  • IDOR             ") + dim("(Active) ") + white(" — Tests for insecure direct object references.\n") +
+		cyan("  • Access Control   ") + dim("(Active) ") + white(" — Comprehensive checks for BAC (Forced browsing, JWT, Escalation).\n\n") +
 		hiWhite("Usage:\n") +
 		white("  gosentinel scan --url <target> [flags]\n\n") +
 		hiWhite("Examples:\n") +
@@ -183,6 +185,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		&modules.SQLiModule{Client: sharedClient, Config: modules.DefaultSQLiConfig},
 		&modules.SSRFModule{Client: sharedClient, Config: ssrfConfig},
 		&modules.IDORModule{Client: sharedClient, Config: modules.DefaultIDORConfig},
+		&modules.AuthModule{Client: sharedClient, Config: modules.DefaultAuthConfig},
 	}
 	engine := scanner.NewEngine(activeModules)
 
