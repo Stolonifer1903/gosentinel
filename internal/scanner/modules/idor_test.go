@@ -237,16 +237,16 @@ func TestJaccardSimilarity(t *testing.T) {
 		for _, s := range tt.b {
 			sb[s] = struct{}{}
 		}
-		got := jaccardSimilarity(sa, sb)
-		if fmt.Sprintf("%.3f", got) != fmt.Sprintf("%.3f", tt.want) {
-			t.Errorf("jaccardSimilarity(%v, %v) = %.3f, want %.3f", tt.a, tt.b, got, tt.want)
+		res := JaccardSimilarity(sa, sb)
+		if fmt.Sprintf("%.3f", res) != fmt.Sprintf("%.3f", tt.want) {
+			t.Errorf("jaccardSimilarity(%v, %v) = %.3f, want %.3f", tt.a, tt.b, res, tt.want)
 		}
 	}
 }
 
 func TestNormaliseBody(t *testing.T) {
-	body := "<html><!-- comment --><body>ID: abcdef1234567890abcdef1234567890 Time: 2023-10-27T10:00:00Z Unix: 1698393600</body></html>"
-	got := normaliseBody(body)
+	input := "<html><!-- comment --><body>ID: abcdef1234567890abcdef1234567890 Time: 2023-10-27T10:00:00Z Unix: 1698393600</body></html>"
+	got := NormaliseBody(input)
 	if strings.Contains(got, "comment") {
 		t.Error("Comment not stripped")
 	}
@@ -259,8 +259,8 @@ func TestNormaliseBody(t *testing.T) {
 }
 
 func TestTokenise(t *testing.T) {
-	body := strings.ToLower("hello world. This is a test! apple, banana.")
-	got := tokenise(body)
+	input := strings.ToLower("hello world. This is a test! apple, banana.")
+	got := Tokenise(input)
 	expected := []string{"hello", "world", "this", "is", "test", "apple", "banana"}
 	for _, e := range expected {
 		if _, ok := got[e]; !ok {
