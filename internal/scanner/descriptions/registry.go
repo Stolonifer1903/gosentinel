@@ -182,6 +182,48 @@ var DescriptionRegistry = map[CheckID]VulnerabilityDescription{
 		Why:      "Default credentials are widely known and pose an immediate security risk. Attackers can quickly gain unauthorized access using publicly documented default credentials.",
 		Impact:   "Attackers can gain immediate full access to administrative or user accounts without needing to crack passwords, enabling data breaches, account takeovers, and system compromise.",
 	},
+	AuthHorizontalPrivilegeEscalation: {
+		Category: "A01:2021 - Broken Access Control",
+		What:     "An authenticated user was able to access or modify resources belonging to another user of the same privilege level by manipulating resource identifiers.",
+		Why:      "Horizontal privilege escalation occurs when the application fails to verify that the requesting user owns the resource they are trying to access, relying only on a valid session.",
+		Impact:   "Attackers can steal sensitive personal data, modify other users' settings, or perform actions as another user, leading to a complete breach of user privacy and data integrity.",
+	},
+	AuthVerticalPrivilegeEscalation: {
+		Category: "A01:2021 - Broken Access Control",
+		What:     "A low-privileged user was able to access administrative or high-privilege endpoints or functions.",
+		Why:      "Vertical privilege escalation occurs when authorization checks are missing on sensitive administrative functions, allowing any authenticated user to perform restricted actions.",
+		Impact:   "Attackers can gain full administrative control over the application, delete users, access global configuration, or extract all system data.",
+	},
+	AuthForcedBrowsing: {
+		Category: "A01:2021 - Broken Access Control",
+		What:     "Endpoints that should be restricted were accessible without any authentication tokens or credentials.",
+		Why:      "Forced browsing (or missing authentication) happens when developers forget to apply authentication middleware to specific routes, assuming they are 'hidden' or 'internal'.",
+		Impact:   "Unauthenticated attackers can access sensitive internal data, administrative panels, or user information without needing a valid account.",
+	},
+	AuthMethodTampering: {
+		Category: "A01:2021 - Broken Access Control",
+		What:     "Access control restrictions were bypassed by changing the HTTP method (e.g., using POST instead of GET, or using PUT/DELETE).",
+		Why:      "Some security filters only apply to specific HTTP methods. By tampering with the method, an attacker can sometimes bypass these filters while the backend still processes the request.",
+		Impact:   "Attackers can bypass authentication or authorization checks to perform sensitive state-changing operations like modifying or deleting data.",
+	},
+	AuthJWTManipulation: {
+		Category: "A01:2021 - Broken Access Control",
+		What:     "The server accepted a JSON Web Token (JWT) that was manipulated (e.g., 'alg: none' attack or tampered claims).",
+		Why:      "Improper JWT validation, such as trusting the 'alg' header without verification or failing to validate the signature, allows attackers to forge their own identity or elevate their roles.",
+		Impact:   "Attackers can impersonate any user, including administrators, by forging valid-looking but malicious tokens.",
+	},
+	AuthPathTraversalBypass: {
+		Category: "A01:2021 - Broken Access Control",
+		What:     "Access control enforcement was bypassed using path normalization tricks or encoding (e.g., /admin/../admin).",
+		Why:      "Inconsistencies between how a security proxy (like a WAF) and the backend server normalize URLs can allow attackers to craft paths that bypass security rules.",
+		Impact:   "Attackers can access restricted administrative areas or internal APIs that are supposedly protected by path-based security rules.",
+	},
+	AuthCORSMisconfiguration: {
+		Category: "A05:2021 - Security Misconfiguration",
+		What:     "The Cross-Origin Resource Sharing (CORS) policy is overly permissive, allowing any origin to access sensitive data.",
+		Why:      "Misconfigured CORS headers (like Access-Control-Allow-Origin: *) on endpoints that use credentials can allow malicious websites to make cross-origin requests and steal user data.",
+		Impact:   "A malicious site visited by a logged-in user can steal their sensitive data or perform actions on their behalf via cross-site requests.",
+	},
 }
 
 // GetDescription retrieves and formats the structured description for a given CheckID.

@@ -53,7 +53,14 @@ const (
 	IDORNumericIDAccess CheckID = "IDOR_NUMERIC_ID_ACCESS"
 )
 
-// Authentication-related check IDs
+// Authentication and Access Control-related check IDs
 const (
-	AuthDefaultCredentials CheckID = "AUTH_DEFAULT_CREDENTIALS"
+	AuthDefaultCredentials            CheckID = "AUTH_DEFAULT_CREDENTIALS"
+	AuthHorizontalPrivilegeEscalation CheckID = "AUTH_HORIZONTAL_PRIVILEGE_ESCALATION"
+	AuthVerticalPrivilegeEscalation   CheckID = "AUTH_VERTICAL_PRIVILEGE_ESCALATION"
+	AuthForcedBrowsing                CheckID = "AUTH_FORCED_BROWSING"
+	AuthMethodTampering               CheckID = "AUTH_METHOD_TAMPERING"
+	AuthJWTManipulation               CheckID = "AUTH_JWT_MANIPULATION"
+	AuthPathTraversalBypass           CheckID = "AUTH_PATH_TRAVERSAL_BYPASS"
+	AuthCORSMisconfiguration          CheckID = "AUTH_CORS_MISCONFIGURATION"
 )
