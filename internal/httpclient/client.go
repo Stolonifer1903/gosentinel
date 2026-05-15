@@ -172,17 +172,19 @@ func buildSubmitRequest(ctx context.Context, req SubmitRequest) (*http.Request, 
 		applyHeaders(httpReq, req.Headers)
 		return httpReq, nil
 
-	case http.MethodPost:
+	case http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch:
 		form := url.Values{}
 		for key, value := range req.Params {
 			form.Set(key, value)
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, req.URL, strings.NewReader(form.Encode()))
+		httpReq, err := http.NewRequestWithContext(ctx, strings.ToUpper(req.Method), req.URL, strings.NewReader(form.Encode()))
 		if err != nil {
 			return nil, err
 		}
-		httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if len(req.Params) > 0 {
+			httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
 		applyHeaders(httpReq, req.Headers)
 		return httpReq, nil
 
