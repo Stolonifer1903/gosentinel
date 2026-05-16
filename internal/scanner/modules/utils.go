@@ -9,7 +9,7 @@ import (
 var (
 	reHexToken    = regexp.MustCompile(`[0-9a-fA-F]{32,}`)
 	reISO8601     = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?`)
-	reUnixEpoch   = regexp.MustCompile(`\b\d{10,}\b`)
+	reUnixEpoch   = regexp.MustCompile(`\b(1[0-9]{9}|2[0-4][0-9]{8})\b`)
 	reHTMLComment = regexp.MustCompile(`(?s)<!--.*?-->`)
 )
 
