@@ -98,6 +98,12 @@ func (c *Client) HTTPClient() *http.Client {
 	return c.httpClient
 }
 
+// AnonClient returns a new Client sharing the same underlying http.Client
+// transport but with no DefaultHeaders. Use for unauthenticated probes.
+func (c *Client) AnonClient() *Client {
+	return &Client{httpClient: c.httpClient}
+}
+
 // Submit performs a parameterised GET or POST request and returns the full response.
 func (c *Client) Submit(req SubmitRequest) (*ResponseResult, error) {
 	ctx := req.Ctx
