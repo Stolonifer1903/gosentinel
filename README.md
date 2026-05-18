@@ -25,6 +25,7 @@ GoSentinel is a concurrent web vulnerability scanner designed for reconnaissance
 | **SQLi**       | Active  | Detects SQL Injection via error-based heuristics and time-based (blind) payload delays, validating against dynamic baseline response profiles.    |
 | **SSRF**       | Active  | Tests parameters for Server-Side Request Forgery using in-band reflection, cloud metadata endpoints, and partial-blind port scanning heuristics.  |
 | **IDOR**       | Active  | Detects Insecure Direct Object Reference via numeric ID enumeration and Jaccard similarity-based response analysis.                               |
+| **Access Control**| Active  | Performs comprehensive checks for Broken Access Control (BAC) including Privilege Escalation, Forced Browsing, HTTP Method Tampering, and JWT Manipulation. |
 
 ## Quick Start
 
